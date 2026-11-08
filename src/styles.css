@@ -1,0 +1,2445 @@
+/*
+ * Ink is for data. Two looks share everything below:
+ *  - Schematik (default): like Schematik's circuit drawings — paper, near-black
+ *    ink, IBM Plex, square boxes with ink outlines, wires at one weight, each
+ *    net in its own colour. Its rules are scoped to :root.style-schematik.
+ *  - Classic: white cards with hairline edges, grey text, and an accent blue
+ *    for live signal only (after lemio/Documenter).
+ * --lw (wire weight), --gw (outline weight) and --fs (text scale) come from src/style.ts.
+ */
+
+:root {
+	--past: #a2650f;
+	--past-paper: #fbf5e9;
+	--paper: #ffffff;
+	--ink: #1d1d1f;
+	--ink-2: #6e6e73;
+	--ink-3: #aeaeb2;
+	--line: rgba(0, 0, 0, 0.1);
+	--hover: rgba(0, 0, 0, 0.045);
+	--accent: #2283f6;
+	--accent-soft: rgba(34, 131, 246, 0.18);
+	--warn: #c8452c;
+	--font: 'Roboto Flex', -apple-system, system-ui, sans-serif;
+	--mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+	--lw: 2.5px;
+	--gw: 1px;
+	--fs: 1;
+}
+
+.tl-theme__dark,
+.app[data-theme='dark'] {
+	--past: #e0a54a;
+	--past-paper: #2a241b;
+	--paper: #232326;
+	--ink: #f2f2f7;
+	--ink-2: #a1a1a6;
+	--ink-3: #5e5e63;
+	--line: rgba(255, 255, 255, 0.12);
+	--hover: rgba(255, 255, 255, 0.06);
+	--accent: #4c9bff;
+	--accent-soft: rgba(76, 155, 255, 0.22);
+	--warn: #ff7a5c;
+}
+
+:root.style-schematik {
+	--paper: #ffffff;
+	--ink: #1a1a1a;
+	--ink-2: #6e6e6a;
+	--ink-3: #b4b3ae;
+	--line: #e4e3df;
+	--hover: rgba(26, 26, 26, 0.05);
+	--accent: #1e3a8a;
+	--accent-soft: rgba(30, 58, 138, 0.16);
+	--warn: #d7263d;
+	--font: 'IBM Plex Sans', system-ui, sans-serif;
+	--mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+:root.style-schematik .tl-theme__dark,
+:root.style-schematik .app[data-theme='dark'] {
+	--paper: #161616;
+	--ink: #e8e7e3;
+	--ink-2: #9a9994;
+	--ink-3: #55554f;
+	--line: #2c2c2a;
+	--hover: rgba(232, 231, 227, 0.06);
+	--accent: #7aa2ff;
+	--accent-soft: rgba(122, 162, 255, 0.22);
+	--warn: #ff5c6c;
+}
+
+html,
+body,
+#root {
+	margin: 0;
+	height: 100%;
+	overflow: hidden;
+	font-family: var(--font);
+	background: var(--paper);
+}
+
+.app {
+	position: fixed;
+	inset: 0;
+	display: flex;
+	background: var(--paper);
+	color: var(--ink);
+}
+.app-canvas {
+	position: relative;
+	flex: 1;
+	min-width: 0;
+}
+
+button {
+	font: inherit;
+	color: inherit;
+}
+
+/* ================================================================ blocks */
+
+.io {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	padding: 10px 12px;
+	background: var(--paper);
+	border: 1px solid var(--line);
+	border-radius: 12px;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+	font-family: var(--font);
+	color: var(--ink);
+	overflow: visible;
+}
+
+.io-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 6px;
+	height: 18px;
+	font-size: 12px;
+	color: var(--ink-2);
+}
+.io-label {
+	font-weight: 500;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.io-label-input {
+	font: inherit;
+	font-weight: 500;
+	color: var(--ink);
+	background: var(--hover);
+	border: none;
+	outline: none;
+	border-radius: 4px;
+	padding: 0 4px;
+	margin-left: -4px;
+	width: 60%;
+}
+.io-chips {
+	display: flex;
+	gap: 4px;
+	flex: none;
+}
+
+.chip {
+	position: relative;
+	font-size: 11px;
+	line-height: 16px;
+	padding: 0 7px;
+	border-radius: 999px;
+	background: var(--hover);
+	color: var(--ink-2);
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+.chip:hover {
+	color: var(--ink);
+}
+.chip select {
+	position: absolute;
+	inset: 0;
+	opacity: 0;
+	cursor: pointer;
+	font-size: 14px;
+}
+.chip-unset {
+	color: var(--ink-3);
+}
+.chip-warn {
+	color: var(--warn);
+	box-shadow: inset 0 0 0 1px var(--warn);
+}
+
+.io-body {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 0;
+}
+
+.spark {
+	flex: none;
+	overflow: visible;
+}
+.spark path {
+	fill: none;
+	stroke: var(--ink-3);
+	stroke-width: 1;
+	stroke-linejoin: round;
+}
+.spark circle {
+	fill: var(--accent);
+}
+
+.io-value {
+	margin-left: auto;
+	padding: 0 4px;
+	margin-right: -4px;
+	border: none;
+	border-radius: 6px;
+	background: none;
+	font-size: 26px;
+	font-weight: 450;
+	letter-spacing: -0.01em;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+	color: var(--ink);
+	cursor: default;
+}
+.io-value small {
+	font-size: 12px;
+	font-weight: 400;
+	color: var(--ink-2);
+	margin-left: 3px;
+}
+/* LOW is the absence of signal: draw it quietly. */
+.io-din .io-value:not(.is-high),
+.io-dout .io-value:not(.is-high) {
+	color: var(--ink-3);
+}
+.io-value.is-action {
+	cursor: pointer;
+}
+.io-value.is-action:hover {
+	background: var(--hover);
+}
+
+.io-slider {
+	position: relative;
+	height: 16px;
+	cursor: ew-resize;
+	touch-action: none;
+}
+.io-slider::before {
+	content: '';
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 50%;
+	border-top: 1px solid var(--line);
+}
+.io-slider-fill {
+	position: absolute;
+	left: 0;
+	top: calc(50% - 1px);
+	height: 2px;
+	background: var(--ink-2);
+}
+.io-slider-knob {
+	position: absolute;
+	top: 50%;
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	background: var(--paper);
+	border: 1.5px solid var(--ink-2);
+	transform: translate(-50%, -50%);
+	box-sizing: border-box;
+}
+.io-slider:hover .io-slider-knob {
+	border-color: var(--ink);
+}
+
+/* Smaller blocks: name and value (64 px), then the value alone (32 px). */
+.io-tier-name {
+	padding: 8px 12px;
+}
+.io-tier-name .io-head {
+	height: 16px;
+}
+.io-tier-name .io-value {
+	font-size: 22px;
+}
+.io-tier-value {
+	padding: 0 10px;
+	justify-content: center;
+}
+.io-tier-value .io-body {
+	flex: none;
+}
+.io-tier-value .io-value {
+	font-size: 17px;
+	line-height: 1;
+}
+.io-tier-value .io-value small {
+	font-size: 8px;
+}
+.io-tier-name .io-value small {
+	font-size: 10px;
+}
+.io-tier-value .io-label-input {
+	font-size: 12px;
+}
+
+.io-spark-control {
+	display: flex;
+	cursor: ns-resize;
+	touch-action: none;
+}
+.io-spark-control:hover .spark path {
+	stroke: var(--ink-2);
+}
+
+/* ================================================================== ports */
+
+.port {
+	position: absolute;
+	width: 24px;
+	height: 24px;
+	display: grid;
+	place-items: center;
+	transform: translate(-50%, -50%);
+	cursor: crosshair;
+	touch-action: none;
+}
+.port-out {
+	left: 100%;
+}
+.port-in {
+	left: 0;
+}
+.port i {
+	box-sizing: border-box;
+	width: 10px;
+	height: 10px;
+	background: var(--paper);
+	border: 1.5px solid var(--ink-3);
+	transition:
+		transform 0.12s,
+		box-shadow 0.12s;
+}
+.port-digital i {
+	border-radius: 2px;
+}
+.port-analog i {
+	border-radius: 50%;
+}
+.port.is-connected i {
+	background: var(--ink-2);
+	border-color: var(--ink-2);
+}
+.port:hover i {
+	transform: scale(1.3);
+	border-color: var(--ink);
+}
+.port.is-target i {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 5px var(--accent-soft);
+}
+.port.is-snapped i {
+	background: var(--accent);
+	transform: scale(1.4);
+}
+
+/* ================================================================== wires */
+
+.wire path {
+	fill: none;
+	stroke-linecap: round;
+}
+.wire-base {
+	stroke: var(--ink-3);
+	stroke-width: 1.5;
+}
+.wire-signal {
+	stroke: var(--accent);
+	stroke-width: 2.5;
+	transition: opacity 60ms linear;
+}
+
+.cast {
+	position: absolute;
+	transform: translate(-50%, -50%);
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	padding: 2px 8px;
+	font-family: var(--font);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+	color: var(--ink-2);
+	background: var(--paper);
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	pointer-events: all;
+	user-select: none;
+}
+.cast-from,
+.cast-arrow {
+	color: var(--ink-3);
+}
+.cast-adjust {
+	cursor: ew-resize;
+	touch-action: none;
+}
+.cast-adjust:hover {
+	border-color: var(--ink-3);
+}
+.cast-meter .track {
+	stroke: var(--line);
+	stroke-width: 1;
+}
+.cast-meter .level {
+	stroke: var(--ink-3);
+	stroke-width: 3;
+}
+.cast-meter .tick {
+	stroke: var(--ink);
+	stroke-width: 1.5;
+}
+.cast-on {
+	color: var(--ink);
+}
+
+/* ================================================================= camera */
+
+.cam {
+	box-sizing: border-box;
+	border-radius: 12px;
+	overflow: hidden;
+	background: var(--paper);
+	border: 1px solid var(--line);
+	font-family: var(--font);
+	color: var(--ink-2);
+}
+.cam-video {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+	background: #000;
+}
+.cam-empty {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	padding: 16px;
+	box-sizing: border-box;
+	text-align: center;
+	font-size: 13px;
+}
+.cam-empty p {
+	margin: 0;
+}
+.cam-choices {
+	display: flex;
+	gap: 8px;
+}
+.cam button,
+.cam select {
+	font: inherit;
+	font-size: 12px;
+	padding: 5px 12px;
+	border-radius: 8px;
+	border: 1px solid var(--line);
+	background: var(--paper);
+	color: var(--ink);
+	cursor: pointer;
+}
+.cam button:hover {
+	background: var(--hover);
+}
+.cam-pair img {
+	width: min(55%, 170px);
+	image-rendering: pixelated;
+}
+.cam-pair a {
+	color: var(--ink);
+	font-size: 11px;
+	word-break: break-all;
+}
+.cam-error {
+	color: var(--warn);
+	font-size: 11px;
+}
+.cam-bar {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	display: flex;
+	gap: 6px;
+	opacity: 0;
+	transition: opacity 0.15s;
+}
+.cam:hover .cam-bar {
+	opacity: 1;
+}
+.cam-label {
+	position: absolute;
+	left: 8px;
+	bottom: 8px;
+	padding: 2px 8px;
+	border-radius: 6px;
+	font-size: 12px;
+	color: #fff;
+	background: rgba(0, 0, 0, 0.5);
+}
+.cam-label input.cam-name {
+	pointer-events: all;
+	width: 260px;
+}
+.cam-label input {
+	font: inherit;
+	color: inherit;
+	background: none;
+	border: none;
+	outline: none;
+}
+
+/* ============================================================ top bar */
+
+.hwbar {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	margin-top: 8px;
+	padding: 4px;
+	max-width: calc(100vw - 32px);
+	overflow-x: auto;
+	scrollbar-width: none;
+	background: var(--tl-color-panel);
+	border-radius: var(--tl-radius-4, 12px);
+	box-shadow: var(--tl-shadow-2);
+	pointer-events: all;
+	font-family: var(--font);
+	font-size: 12px;
+	color: var(--tl-color-text-1);
+}
+.hwbar button {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	height: 32px;
+	padding: 0 10px;
+	border: none;
+	border-radius: 8px;
+	background: none;
+	white-space: nowrap;
+	cursor: pointer;
+}
+.hwbar button:hover:not(:disabled) {
+	background: var(--tl-color-muted-2, var(--hover));
+}
+.hwbar button.is-on {
+	background: var(--tl-color-muted-2, var(--hover));
+}
+.hwbar-sep {
+	width: 1px;
+	height: 20px;
+	margin: 0 4px;
+	background: var(--tl-color-divider);
+	flex: none;
+}
+
+.glyph {
+	flex: none;
+	box-sizing: border-box;
+	width: 9px;
+	height: 9px;
+	border: 1.5px solid currentColor;
+	opacity: 0.6;
+}
+.glyph-digital {
+	border-radius: 2px;
+}
+.glyph-analog {
+	border-radius: 50%;
+}
+.glyph-camera {
+	width: 12px;
+	border-radius: 2px;
+}
+
+@media (max-width: 760px) {
+	.hwbar-add {
+		font-size: 0;
+		gap: 0 !important;
+	}
+	.hwbar-add .glyph {
+		font-size: 12px;
+	}
+}
+
+/* board status */
+
+.board {
+	position: relative;
+}
+.board-chip {
+	position: relative;
+	overflow: hidden;
+	font-variant-numeric: tabular-nums;
+}
+.board-chip:disabled {
+	cursor: default;
+	color: var(--tl-color-text-3);
+}
+.board-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	border: 1.5px solid currentColor;
+	box-sizing: border-box;
+	opacity: 0.5;
+}
+.board-live .board-dot {
+	background: var(--accent);
+	border-color: var(--accent);
+	opacity: 1;
+}
+.board-no-micropython .board-dot {
+	border-color: var(--warn);
+	opacity: 1;
+}
+.board-progress {
+	position: absolute;
+	left: 0;
+	bottom: 0;
+	height: 2px;
+	background: var(--accent);
+	transition: width 0.2s;
+}
+
+.pop {
+	position: fixed;
+	z-index: 1000;
+	width: 280px;
+	padding: 6px;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	background: var(--paper);
+	color: var(--ink);
+	border: 1px solid var(--line);
+	border-radius: 10px;
+	box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14);
+	font-family: var(--font);
+	font-size: 12px;
+	line-height: 1.45;
+}
+.pop button {
+	display: flex;
+	align-items: center;
+	height: 30px;
+	padding: 0 10px;
+	border: none;
+	border-radius: 7px;
+	background: none;
+	font-size: 12px;
+	cursor: pointer;
+}
+.pop button:hover {
+	background: var(--hover);
+}
+.pop p {
+	margin: 6px 8px;
+}
+.pop > button {
+	text-align: left;
+	justify-content: flex-start;
+}
+.pop-actions {
+	display: flex;
+	gap: 6px;
+	padding: 4px 6px;
+}
+.pop-actions button {
+	border: 1px solid var(--line);
+}
+.pop-actions .primary {
+	background: var(--accent) !important;
+	border-color: var(--accent) !important;
+	color: #fff;
+}
+.pop-hint {
+	color: var(--ink-2);
+	font-size: 11px;
+}
+.pop-error {
+	color: var(--warn);
+	cursor: pointer;
+}
+kbd {
+	font-family: var(--mono);
+	font-size: 10px;
+	padding: 0 4px;
+	border: 1px solid var(--line);
+	border-radius: 3px;
+}
+
+/* share */
+
+.share {
+	gap: 6px;
+	padding: 8px 8px 0 0;
+}
+.share-invite {
+	height: 32px;
+	padding: 0 12px;
+	border: none;
+	border-radius: 8px;
+	background: var(--accent);
+	color: #fff;
+	font-family: var(--font);
+	font-size: 12px;
+	font-weight: 500;
+	cursor: pointer;
+	pointer-events: all;
+}
+
+/* =========================================================== code panel */
+
+.code {
+	width: min(420px, 45vw);
+	flex: none;
+	display: flex;
+	flex-direction: column;
+	border-left: 1px solid var(--line);
+	background: var(--paper);
+	color: var(--ink);
+	font-size: 12px;
+}
+.code header {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 10px 12px 6px 16px;
+}
+.code h2 {
+	flex: 1;
+	margin: 0;
+	font-size: 12px;
+	font-weight: 500;
+	font-family: var(--mono);
+	color: var(--ink-2);
+}
+.code header button {
+	height: 26px;
+	padding: 0 9px;
+	border: 1px solid var(--line);
+	border-radius: 7px;
+	background: none;
+	font-size: 12px;
+	cursor: pointer;
+}
+.code header button:hover:not(:disabled) {
+	background: var(--hover);
+}
+.code header button:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+.code header .code-close {
+	border: none;
+	font-size: 18px;
+	color: var(--ink-2);
+}
+.code-src {
+	flex: 1.4;
+	margin: 0;
+	padding: 6px 16px 16px;
+	overflow: auto;
+	font-family: var(--mono);
+	font-size: 12px;
+	line-height: 1.6;
+	tab-size: 4;
+	user-select: text;
+}
+.code-src .c {
+	color: var(--ink-3);
+}
+
+.console {
+	flex: 1;
+	min-height: 140px;
+	display: flex;
+	flex-direction: column;
+	border-top: 1px solid var(--line);
+}
+.console-lines {
+	flex: 1;
+	overflow: auto;
+	padding: 2px 16px 8px;
+	font-family: var(--mono);
+	font-size: 11.5px;
+	line-height: 1.55;
+	white-space: pre-wrap;
+	word-break: break-word;
+	user-select: text;
+}
+.console-in {
+	color: var(--ink-2);
+}
+.console-sys,
+.console-empty {
+	color: var(--ink-3);
+}
+.console form {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 16px 12px;
+	border-top: 1px solid var(--line);
+	font-family: var(--mono);
+	color: var(--ink-3);
+}
+.console input {
+	flex: 1;
+	border: none;
+	outline: none;
+	background: none;
+	font: inherit;
+	font-size: 12px;
+	color: var(--ink);
+}
+
+@media (max-width: 700px) {
+	.app {
+		flex-direction: column;
+	}
+	.code {
+		width: auto;
+		height: 50%;
+		border-left: none;
+		border-top: 1px solid var(--line);
+	}
+}
+
+/* ============================================================ phone camera */
+
+.phone {
+	position: fixed;
+	inset: 0;
+	background: #000;
+	color: #fff;
+	font-family: var(--font);
+}
+.phone video {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+.phone-bar {
+	position: absolute;
+	left: 16px;
+	right: 16px;
+	bottom: max(16px, env(safe-area-inset-bottom));
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	font-size: 14px;
+}
+.phone-bar span::before {
+	content: '';
+	display: inline-block;
+	width: 8px;
+	height: 8px;
+	margin-right: 8px;
+	border-radius: 50%;
+	border: 1.5px solid #fff;
+	opacity: 0.6;
+}
+.phone-bar .phone-live::before {
+	background: #4c9bff;
+	border-color: #4c9bff;
+	opacity: 1;
+}
+.phone-bar button {
+	padding: 8px 16px;
+	border-radius: 999px;
+	border: none;
+	background: rgba(255, 255, 255, 0.18);
+	color: #fff;
+	font-size: 14px;
+}
+
+/* ======================================================== wire functions */
+
+.cast {
+	cursor: pointer;
+}
+.cast:hover {
+	border-color: var(--ink-3);
+}
+.cast-th {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+}
+.cast-sep {
+	width: 1px;
+	height: 10px;
+	background: var(--line);
+}
+/* A plain wire only offers an ƒ while hovered or selected. */
+.cast-fn {
+	padding: 0 6px;
+	font-style: italic;
+	font-family: Georgia, serif;
+	color: var(--ink-2);
+}
+
+/* Replayed values are the past: drawn with a dashed edge. */
+.io-replay {
+	border-style: dashed;
+	border-color: var(--ink-3);
+}
+
+/* ============================================================== inspector */
+
+.insp {
+	position: absolute;
+	z-index: 500;
+	box-sizing: border-box;
+	padding: 10px 12px 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	background: var(--paper);
+	color: var(--ink);
+	border: 1px solid var(--line);
+	border-radius: 12px;
+	box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14);
+	font-family: var(--font);
+	font-size: 12px;
+	pointer-events: all;
+}
+.insp header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	color: var(--ink-2);
+	font-weight: 500;
+}
+.insp-arrow {
+	color: var(--ink-3);
+}
+.insp button {
+	font: inherit;
+	cursor: pointer;
+}
+.insp-close {
+	border: none;
+	background: none;
+	font-size: 16px !important;
+	color: var(--ink-2);
+	padding: 0 2px;
+}
+.insp-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+.seg {
+	display: inline-flex;
+	padding: 2px;
+	border-radius: 8px;
+	background: var(--hover);
+}
+.seg button {
+	border: none;
+	background: none;
+	padding: 3px 9px;
+	border-radius: 6px;
+	color: var(--ink-2);
+}
+.seg button.is-on {
+	background: var(--paper);
+	color: var(--ink);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+.insp-check {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	color: var(--ink-2);
+	cursor: pointer;
+}
+.insp-check input {
+	margin: 0;
+	accent-color: var(--accent);
+}
+
+.insp-traces {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.insp-sources {
+	display: flex;
+	gap: 4px;
+	flex-wrap: wrap;
+	margin-bottom: 2px;
+}
+.insp-sources button {
+	border: none;
+	background: none;
+	padding: 1px 6px;
+	border-radius: 999px;
+	color: var(--ink-3);
+	font-size: 11px;
+}
+.insp-sources button.is-on {
+	color: var(--ink);
+	background: var(--hover);
+}
+.insp-trace {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.insp-trace > span {
+	width: 16px;
+	font-size: 10px;
+	color: var(--ink-3);
+}
+.insp-threshold {
+	position: absolute;
+	inset: 0;
+	cursor: ns-resize;
+	overflow: visible;
+}
+.insp-threshold line {
+	stroke: var(--ink);
+	stroke-width: 1;
+	stroke-dasharray: 3 3;
+}
+.insp-threshold text {
+	font-size: 10px;
+	fill: var(--ink-2);
+}
+.insp-playhead {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 1px;
+	background: var(--accent);
+}
+.insp-caption {
+	padding-left: 22px;
+	font-size: 10px;
+	color: var(--ink-3);
+}
+
+.insp-map {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+}
+.insp-plot rect {
+	fill: none;
+	stroke: var(--line);
+}
+.insp-plot polyline {
+	fill: none;
+	stroke: var(--ink-2);
+	stroke-width: 1.5;
+}
+.insp-plot .now {
+	fill: var(--accent);
+}
+.insp-plot .handle {
+	fill: var(--paper);
+	stroke: var(--ink);
+	stroke-width: 1.5;
+	cursor: move;
+}
+.insp-map dl {
+	margin: 0;
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 2px 8px;
+	font-variant-numeric: tabular-nums;
+}
+.insp-map dt {
+	color: var(--ink-3);
+}
+.insp-map dd {
+	margin: 0;
+}
+.insp-map .insp-hint {
+	grid-column: 1 / -1;
+	margin-top: 4px;
+	color: var(--ink-3);
+	font-size: 10.5px;
+}
+
+.insp-levels {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.insp-level {
+	display: grid;
+	grid-template-columns: 52px 1fr 40px;
+	align-items: center;
+	gap: 8px;
+	color: var(--ink-2);
+}
+.insp-level b {
+	font-weight: 500;
+	color: var(--ink);
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+.insp-note {
+	margin: 0;
+	color: var(--ink-2);
+	line-height: 1.45;
+}
+
+/* ================================================================== clips */
+
+.clip {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	background: var(--paper);
+	border: 1px solid var(--line);
+	border-radius: 12px;
+	overflow: hidden;
+	font-family: var(--font);
+	font-size: 12px;
+	color: var(--ink-2);
+}
+.clip.is-replaying {
+	border-color: var(--accent);
+}
+.clip-head {
+	height: 30px;
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 0 10px 0 6px;
+}
+.clip-head button {
+	border: none;
+	background: none;
+	border-radius: 6px;
+	cursor: pointer;
+	font-size: 11px;
+	color: var(--ink);
+	padding: 3px 7px;
+}
+.clip-head button:hover {
+	background: var(--hover);
+}
+.clip-play {
+	width: 26px;
+}
+.clip-label {
+	font-weight: 500;
+	flex: 1;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.clip-head input.clip-name {
+	flex: 1;
+	font: inherit;
+	font-weight: 500;
+	border: none;
+	outline: none;
+	background: var(--hover);
+	border-radius: 4px;
+	color: var(--ink);
+}
+.clip-time {
+	font-variant-numeric: tabular-nums;
+	color: var(--ink-3);
+}
+.clip-live {
+	color: var(--accent) !important;
+}
+.clip-video {
+	flex: none;
+	background: #000;
+	display: grid;
+	place-items: center;
+	color: rgba(255, 255, 255, 0.55);
+	font-size: 11px;
+}
+.clip-video video {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+.clip-rows {
+	position: relative;
+	margin: 0 12px;
+	cursor: col-resize;
+	touch-action: none;
+}
+.clip-row {
+	display: flex;
+	align-items: center;
+}
+.clip-row > span {
+	width: 76px;
+	flex: none;
+	font-size: 11px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	padding-right: 6px;
+	box-sizing: border-box;
+}
+.clip-axis {
+	position: relative;
+	font-size: 10px;
+	color: var(--ink-3);
+}
+.clip-axis span {
+	position: absolute;
+	top: 4px;
+}
+.clip-playhead {
+	position: absolute;
+	top: 0;
+	bottom: 18px;
+	width: 1px;
+	background: var(--accent);
+	pointer-events: none;
+}
+
+/* record */
+
+.glyph-rec {
+	border-radius: 50%;
+	border: none;
+	background: var(--warn);
+	opacity: 1;
+}
+.glyph-stop {
+	border: none;
+	background: var(--warn);
+	border-radius: 1px;
+	opacity: 1;
+}
+.glyph-replay {
+	border-radius: 50%;
+	border-color: var(--accent);
+	opacity: 1;
+}
+.rec-on,
+.rec-replay {
+	font-variant-numeric: tabular-nums;
+}
+.rec-replay {
+	color: var(--accent);
+}
+
+/* ================================================================ naming */
+
+.io-label.is-unnamed {
+	color: var(--ink-3);
+	font-style: italic;
+	font-weight: 400;
+}
+.io-label.is-renamable {
+	cursor: text;
+	border-radius: 4px;
+	margin-left: -4px;
+	padding: 0 4px;
+}
+.io-label.is-renamable:hover {
+	background: var(--hover);
+	color: var(--ink);
+}
+.io-label-input::placeholder {
+	color: var(--ink-3);
+	font-weight: 400;
+}
+.io-label-input {
+	width: 100%;
+	min-width: 0;
+}
+button.chip {
+	border: none;
+	font-family: inherit;
+	cursor: pointer;
+}
+
+/* ============================================================ pin picker */
+
+/* The chip whose dropdown is open. */
+.chip.is-open {
+	color: var(--ink);
+	box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.picker {
+	position: absolute;
+	z-index: 500;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	padding: 6px 8px 8px;
+	background: var(--paper);
+	color: var(--ink);
+	border: 1px solid var(--line);
+	border-radius: 10px;
+	box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14);
+	font-family: var(--font);
+	font-size: 11px;
+	pointer-events: all;
+}
+/* A small notch pointing at the chip, so it's clear which block this is for. */
+.picker-caret {
+	position: absolute;
+	top: -6px;
+	width: 10px;
+	height: 10px;
+	margin-left: -5px;
+	background: var(--paper);
+	border-left: 1px solid var(--line);
+	border-top: 1px solid var(--line);
+	transform: rotate(45deg);
+}
+.picker.is-up .picker-caret {
+	top: auto;
+	bottom: -6px;
+	transform: rotate(225deg);
+}
+/* Exactly one line, whatever it says: the panel never changes size. */
+.picker-status {
+	margin: 0;
+	width: 100%;
+	height: 16px;
+	line-height: 16px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	text-align: center;
+	color: var(--ink-2);
+	font-variant-numeric: tabular-nums;
+}
+.picker-board {
+	display: block;
+	flex: none;
+	overflow: visible;
+}
+.picker-board image {
+	pointer-events: none;
+}
+.picker .pin rect {
+	fill: transparent;
+	cursor: pointer;
+}
+.picker .pin.is-off rect {
+	fill: rgba(0, 0, 0, 0.62);
+	cursor: not-allowed;
+}
+.picker .pin.is-hover rect {
+	stroke: #fff;
+	stroke-width: 8;
+}
+.picker .pin.is-used rect {
+	stroke: rgba(255, 255, 255, 0.55);
+	stroke-width: 6;
+	stroke-dasharray: 16 12;
+}
+.picker .pin.is-mine rect {
+	fill: rgba(76, 155, 255, 0.28);
+	stroke: var(--accent);
+	stroke-width: 12;
+	stroke-dasharray: none;
+}
+.picker .pin text {
+	font-family: var(--font);
+	font-size: 52px;
+	fill: var(--ink-2);
+	pointer-events: none;
+}
+.picker .pin.is-mine text {
+	fill: var(--accent);
+	font-weight: 600;
+}
+
+/* ================================================================ palette */
+
+.palette {
+	position: absolute;
+	left: 8px;
+	top: 56px;
+	z-index: 400;
+	width: 148px;
+	max-height: calc(100% - 128px);
+	overflow-y: auto;
+	scrollbar-width: none;
+	padding: 6px;
+	box-sizing: border-box;
+	background: var(--tl-color-panel, var(--paper));
+	border-radius: 12px;
+	box-shadow: var(--tl-shadow-2);
+	font-family: var(--font);
+	font-size: 12px;
+	color: var(--tl-color-text-1, var(--ink));
+	pointer-events: all;
+}
+.palette section + section {
+	margin-top: 6px;
+}
+.palette h3 {
+	margin: 4px 8px 2px;
+	font-size: 10.5px;
+	font-weight: 500;
+	letter-spacing: 0.02em;
+	color: var(--ink-3);
+}
+.palette button {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	height: 28px;
+	padding: 0 8px;
+	border: none;
+	border-radius: 7px;
+	background: none;
+	text-align: left;
+	cursor: grab;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.palette button:hover {
+	background: var(--tl-color-muted-2, var(--hover));
+}
+.palette-ghost {
+	position: fixed;
+	z-index: 1000;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 10px;
+	transform: translate(-50%, -50%);
+	background: var(--paper);
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+	font-family: var(--font);
+	font-size: 12px;
+	pointer-events: none;
+}
+
+/* Type glyphs, matching the ports: square digital, circle analog, diamond number, ring colour. */
+.glyph-number {
+	transform: rotate(45deg) scale(0.85);
+	border-radius: 1px;
+}
+.glyph-colour {
+	border: none;
+	border-radius: 50%;
+	background: conic-gradient(#f44, #fd3, #4d6, #3bf, #a5f, #f44);
+	opacity: 1;
+}
+.glyph-python {
+	width: 10px;
+	height: 10px;
+	border: none;
+	opacity: 0.7;
+	background: linear-gradient(135deg, currentColor 0 45%, transparent 45% 55%, currentColor 55%);
+	border-radius: 2px;
+}
+
+/* ================================================================ ports */
+
+.port-number i {
+	transform: rotate(45deg) scale(0.9);
+	border-radius: 1px;
+}
+.port-number:hover i,
+.port-number.is-snapped i {
+	transform: rotate(45deg) scale(1.25);
+}
+.port-colour i {
+	border: none;
+	width: 11px;
+	height: 11px;
+	border-radius: 50%;
+	background: conic-gradient(#f44, #fd3, #4d6, #3bf, #a5f, #f44);
+	box-shadow: inset 0 0 0 3px var(--paper);
+}
+.port-colour.is-connected i {
+	box-shadow: none;
+}
+
+/* ================================================================ colour */
+
+.io-colour {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	position: relative;
+}
+.io-colour .swatch {
+	display: block;
+	width: 22px;
+	height: 22px;
+	border-radius: 6px;
+	box-shadow: inset 0 0 0 1px var(--line);
+}
+.io-tier-value .io-colour .swatch {
+	width: 16px;
+	height: 16px;
+	border-radius: 4px;
+}
+.io-colour small {
+	font-family: var(--mono);
+	font-size: 11px;
+	color: var(--ink-2);
+}
+.io-colour input[type='color'] {
+	position: absolute;
+	inset: 0;
+	opacity: 0;
+	cursor: pointer;
+	width: 100%;
+	height: 100%;
+	border: none;
+	padding: 0;
+}
+
+/* ============================================================ logic blocks */
+
+.logic {
+	position: relative;
+}
+.chip-kind {
+	color: var(--ink-3);
+	background: none;
+	box-shadow: inset 0 0 0 1px var(--line);
+}
+.logic-grid {
+	position: absolute;
+	left: 0;
+	right: 0;
+	display: grid;
+	grid-template-columns: auto 1fr auto;
+	align-items: center;
+	column-gap: 8px;
+	padding: 0 12px;
+}
+.logic-ins,
+.logic-outs {
+	display: contents;
+}
+.logic-ins > * {
+	grid-column: 1;
+}
+.logic-outs > * {
+	grid-column: 3;
+	justify-self: end;
+}
+.logic-ins > *:nth-child(1),
+.logic-outs > *:nth-child(1) {
+	grid-row: 1;
+}
+.logic-ins > *:nth-child(2),
+.logic-outs > *:nth-child(2) {
+	grid-row: 2;
+}
+.logic-ins > *:nth-child(3),
+.logic-outs > *:nth-child(3) {
+	grid-row: 3;
+}
+.logic-ins > *:nth-child(4),
+.logic-outs > *:nth-child(4) {
+	grid-row: 4;
+}
+.logic-ins > *:nth-child(5),
+.logic-outs > *:nth-child(5) {
+	grid-row: 5;
+}
+.logic-ins > *:nth-child(6),
+.logic-outs > *:nth-child(6) {
+	grid-row: 6;
+}
+.logic-main {
+	grid-column: 2;
+	align-self: stretch;
+	display: flex;
+	align-items: center;
+	min-width: 0;
+}
+.logic-port-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 11px;
+	color: var(--ink-3);
+	white-space: nowrap;
+}
+.logic-param,
+.logic-arriving {
+	font: inherit;
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	color: var(--ink-2);
+	background: none;
+	border: none;
+	padding: 1px 4px;
+	margin-left: -4px;
+	border-radius: 4px;
+}
+.logic-param {
+	cursor: pointer;
+	color: var(--ink);
+}
+.logic-param:hover {
+	background: var(--hover);
+}
+.logic-param-input {
+	width: 52px;
+	font: inherit;
+	font-size: 11px;
+	border: none;
+	outline: none;
+	border-radius: 4px;
+	padding: 1px 4px;
+	background: var(--hover);
+	color: var(--ink);
+	pointer-events: all;
+}
+.logic-port-label .io-colour .swatch {
+	width: 14px;
+	height: 14px;
+	border-radius: 3px;
+}
+.logic-value {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.logic-value .io-value {
+	margin-left: auto;
+}
+.logic-tier-full .logic-value .io-value {
+	font-size: 22px;
+}
+.logic .io-value.is-digital:not(.is-high) {
+	color: var(--ink-3);
+}
+.logic-controls {
+	position: absolute;
+	left: 12px;
+	right: 12px;
+	bottom: 8px;
+	display: flex;
+	gap: 4px;
+}
+.logic-controls button {
+	font: inherit;
+	font-size: 11px;
+	height: 22px;
+	min-width: 28px;
+	padding: 0 8px;
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	background: var(--paper);
+	color: var(--ink);
+	cursor: pointer;
+}
+.logic-controls button:hover {
+	background: var(--hover);
+}
+.logic-controls button:active {
+	background: var(--accent-soft);
+}
+.logic.has-error {
+	border-color: var(--warn);
+}
+.logic-error {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 100%;
+	margin-top: 4px;
+	font-family: var(--mono);
+	font-size: 10.5px;
+	color: var(--warn);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* ============================================================ python editor */
+
+.custom-editor {
+	width: min(460px, 50vw);
+}
+.custom-fields {
+	display: grid;
+	gap: 6px;
+	padding: 4px 16px 8px;
+}
+.custom-fields label {
+	display: grid;
+	grid-template-columns: 56px 1fr;
+	align-items: center;
+	gap: 8px;
+	font-size: 11px;
+	color: var(--ink-2);
+}
+.custom-fields input,
+.custom-fields select {
+	font-family: var(--mono);
+	font-size: 12px;
+	padding: 4px 6px;
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	background: var(--paper);
+	color: var(--ink);
+}
+.custom-hint {
+	margin: 2px 0 0 64px;
+	font-size: 10.5px;
+	color: var(--ink-3);
+	line-height: 1.4;
+}
+.custom-code {
+	flex: 1;
+	margin: 0 16px;
+	padding: 10px 12px;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	resize: none;
+	font-family: var(--mono);
+	font-size: 12px;
+	line-height: 1.6;
+	tab-size: 4;
+	background: var(--hover);
+	color: var(--ink);
+	outline: none;
+}
+.custom-status {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 10px 16px 14px;
+	font-size: 11px;
+	color: var(--ink-2);
+}
+.custom-error {
+	font-family: var(--mono);
+	color: var(--warn);
+}
+.custom-api {
+	font-family: var(--mono);
+	font-size: 10.5px;
+	color: var(--ink-3);
+}
+.insp-ranges {
+	display: grid;
+	grid-template-columns: auto 1fr auto 1fr;
+	align-items: center;
+	gap: 4px 6px;
+	color: var(--ink-2);
+}
+.insp-number {
+	width: 100%;
+	box-sizing: border-box;
+	font: inherit;
+	font-variant-numeric: tabular-nums;
+	padding: 2px 6px;
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	background: var(--paper);
+	color: var(--ink);
+}
+
+/* Colour in casts: shown as colour. */
+.cast-swatch {
+	display: inline-block;
+	width: 10px;
+	height: 10px;
+	border-radius: 3px;
+	box-shadow: inset 0 0 0 1px var(--line);
+	vertical-align: middle;
+}
+.cast-fade {
+	position: relative;
+	display: inline-block;
+	width: 40px;
+	height: 8px;
+	border-radius: 4px;
+	box-shadow: inset 0 0 0 1px var(--line);
+	vertical-align: middle;
+}
+.cast-fade i {
+	position: absolute;
+	top: 50%;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	transform: translate(-50%, -50%);
+	box-shadow:
+		0 0 0 1.5px var(--paper),
+		0 0 0 2.5px var(--ink-3);
+}
+.insp-colours {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 6px 10px;
+}
+.insp-colour {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--ink-2);
+	cursor: pointer;
+}
+.insp-colour code {
+	font-family: var(--mono);
+	font-size: 10.5px;
+	color: var(--ink);
+}
+.insp-colour input {
+	position: absolute;
+	inset: 0;
+	opacity: 0;
+	cursor: pointer;
+}
+.insp-swatch {
+	width: 16px;
+	height: 16px;
+	border-radius: 4px;
+	box-shadow: inset 0 0 0 1px var(--line);
+}
+.insp-fade {
+	grid-column: 1 / -1;
+	height: 8px;
+	border-radius: 4px;
+	box-shadow: inset 0 0 0 1px var(--line);
+}
+
+/* =====================================================================
+ * Schematik's drawing style (:root.style-schematik), over everything above: square boxes with ink
+ * outlines and no shadows; names in Plex Sans, pins and values in Plex Mono;
+ * text scaled by --fs; wires at --lw with mitred corners, in their net's colour.
+ * ===================================================================== */
+/* blocks */
+:root.style-schematik .io,
+:root.style-schematik .cam,
+:root.style-schematik .clip {
+	border: var(--gw) solid var(--ink);
+	border-radius: 0;
+	box-shadow: none;
+}
+:root.style-schematik .io-replay {
+	border-style: dashed;
+}
+:root.style-schematik .logic.has-error {
+	border-color: var(--warn);
+}
+:root.style-schematik .clip.is-replaying {
+	border-color: var(--accent);
+}
+:root.style-schematik .io-head {
+	height: calc(16px * var(--fs));
+	font-size: calc(11.5px * var(--fs));
+}
+:root.style-schematik .io-label {
+	font-weight: 500;
+	color: var(--ink);
+}
+:root.style-schematik .io-label.is-unnamed {
+	color: var(--ink-3);
+}
+:root.style-schematik .io-label.is-renamable,
+:root.style-schematik .io-label-input {
+	border-radius: 0;
+}
+:root.style-schematik .chip,
+:root.style-schematik .chip-kind {
+	font-family: var(--mono);
+	font-size: calc(9px * var(--fs));
+	line-height: calc(14px * var(--fs));
+	padding: 0 2px;
+	border-radius: 0;
+	background: none;
+	box-shadow: none;
+	color: var(--ink-2);
+}
+:root.style-schematik .chip-kind {
+	color: var(--ink-3);
+}
+:root.style-schematik .chip:hover {
+	color: var(--ink);
+}
+:root.style-schematik .chip.is-open {
+	color: var(--ink);
+	box-shadow: inset 0 -1.5px 0 var(--ink);
+}
+:root.style-schematik .chip-warn {
+	color: var(--warn);
+	box-shadow: inset 0 -1.5px 0 var(--warn);
+}
+:root.style-schematik .io-value {
+	font-weight: 500;
+	letter-spacing: 0;
+	border-radius: 0;
+}
+:root.style-schematik .io-value small,
+:root.style-schematik .logic-port-label,
+:root.style-schematik .logic-param,
+:root.style-schematik .logic-arriving,
+:root.style-schematik .logic-param-input {
+	font-family: var(--mono);
+}
+:root.style-schematik .logic-port-label {
+	font-size: calc(9px * var(--fs));
+	color: var(--ink-2);
+}
+:root.style-schematik .logic-param,
+:root.style-schematik .logic-arriving,
+:root.style-schematik .logic-param-input {
+	font-size: calc(9px * var(--fs));
+	border-radius: 0;
+}
+:root.style-schematik .logic-controls button {
+	font-family: var(--mono);
+	font-size: calc(9px * var(--fs));
+	height: calc(18px * var(--fs));
+	border: 1px solid var(--ink);
+	border-radius: 0;
+}
+:root.style-schematik .logic-controls button:active {
+	background: var(--ink);
+	color: var(--paper);
+}
+:root.style-schematik .io-colour .swatch,
+:root.style-schematik .cast-swatch,
+:root.style-schematik .insp-swatch,
+:root.style-schematik .logic-port-label .io-colour .swatch {
+	border-radius: 0;
+	box-shadow: inset 0 0 0 1px var(--ink);
+}
+:root.style-schematik .io-slider-knob {
+	border-radius: 0;
+	border-color: var(--ink);
+}
+:root.style-schematik .io-slider-fill {
+	background: var(--ink);
+}
+/* sparklines: grey line, ink dot for now */
+:root.style-schematik .spark path {
+	stroke: var(--ink-2);
+}
+:root.style-schematik .spark circle {
+	fill: var(--ink);
+}
+/* pins: the type glyph in ink; filled once something is connected */
+:root.style-schematik .port i {
+	border: 2px solid var(--ink);
+	background: var(--paper);
+}
+:root.style-schematik .port.is-connected i {
+	background: var(--ink);
+	border-color: var(--ink);
+}
+:root.style-schematik .port-digital i {
+	border-radius: 0;
+}
+:root.style-schematik .port.is-target i {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 4px var(--accent-soft);
+}
+:root.style-schematik .port.is-snapped i {
+	background: var(--accent);
+	border-color: var(--accent);
+}
+/* wires */
+:root.style-schematik .wire path {
+	stroke-width: var(--lw);
+	stroke-linecap: butt;
+	stroke-linejoin: miter;
+}
+:root.style-schematik .wire-base {
+	stroke: var(--ink);
+	opacity: 0.28;
+}
+:root.style-schematik .wire-signal {
+	stroke: var(--ink);
+}
+:root.style-schematik .cast {
+	font-family: var(--mono);
+	font-size: calc(9px * var(--fs));
+	border-radius: 0;
+	border: 1px solid var(--ink-3);
+	padding: 1px 6px;
+}
+:root.style-schematik .cast-fn {
+	font-family: var(--mono);
+	font-style: normal;
+}
+:root.style-schematik .cast-fade {
+	border-radius: 0;
+	box-shadow: inset 0 0 0 1px var(--ink);
+}
+/* panels: hairline boxes, no shadows, no rounding */
+:root.style-schematik .hwbar,
+:root.style-schematik .palette,
+:root.style-schematik .pop,
+:root.style-schematik .insp,
+:root.style-schematik .picker,
+:root.style-schematik .palette-ghost {
+	border-radius: 0;
+	box-shadow: none;
+	border: 1px solid var(--ink-3);
+	background: var(--paper);
+}
+:root.style-schematik .hwbar {
+	font-size: calc(10.5px * var(--fs));
+}
+:root.style-schematik .hwbar button,
+:root.style-schematik .palette button,
+:root.style-schematik .pop button,
+:root.style-schematik .seg,
+:root.style-schematik .seg button,
+:root.style-schematik .insp-sources button,
+:root.style-schematik .code header button,
+:root.style-schematik .cam button,
+:root.style-schematik .cam select,
+:root.style-schematik .clip-head button,
+:root.style-schematik .picker footer button,
+:root.style-schematik .share-invite,
+:root.style-schematik .custom-fields input,
+:root.style-schematik .custom-fields select,
+:root.style-schematik .custom-code,
+:root.style-schematik .insp-number {
+	border-radius: 0;
+}
+:root.style-schematik .share-invite {
+	background: var(--ink);
+	color: var(--paper);
+	font-family: var(--font);
+}
+:root.style-schematik .palette {
+	width: calc(132px * var(--fs));
+	font-size: calc(10.5px * var(--fs));
+}
+:root.style-schematik .palette h3 {
+	font-size: calc(9.5px * var(--fs));
+	font-weight: 400;
+	letter-spacing: 0;
+	color: var(--ink-2);
+}
+:root.style-schematik .palette button {
+	height: calc(22px * var(--fs));
+}
+:root.style-schematik .insp,
+:root.style-schematik .picker,
+:root.style-schematik .pop {
+	font-size: calc(10.5px * var(--fs));
+}
+:root.style-schematik .insp header,
+:root.style-schematik .picker header {
+	color: var(--ink);
+	font-weight: 500;
+}
+:root.style-schematik .picker-status,
+:root.style-schematik .insp-caption,
+:root.style-schematik .insp-trace > span {
+	font-family: var(--mono);
+}
+:root.style-schematik .code {
+	border-left: 1px solid var(--ink-3);
+}
+:root.style-schematik .code h2,
+:root.style-schematik .console header h2 {
+	color: var(--ink);
+}
+:root.style-schematik .clip-head,
+:root.style-schematik .cam-label {
+	font-size: calc(10.5px * var(--fs));
+}
+:root.style-schematik .clip-row > span,
+:root.style-schematik .clip-axis,
+:root.style-schematik .clip-time {
+	font-family: var(--mono);
+	font-size: calc(8.5px * var(--fs));
+}
+:root.style-schematik .cam-label {
+	border-radius: 0;
+}
+/* tldraw's own menus, toolbar and panels: the same square, shadowless boxes */
+:root.style-schematik .tl-container.tl-theme__light,
+:root.style-schematik .tl-container.tl-theme__dark {
+	--tl-radius-0: 0px;
+	--tl-radius-1: 0px;
+	--tl-radius-2: 0px;
+	--tl-radius-3: 0px;
+	--tl-radius-4: 0px;
+	--tl-shadow-1: 0 0 0 1px var(--ink-3);
+	--tl-shadow-2: 0 0 0 1px var(--ink-3);
+	--tl-shadow-3: 0 0 0 1px var(--ink-3);
+	--tl-shadow-4: 0 0 0 1px var(--ink-3);
+}
+
+/*
+ * Ports sit on the block's outer edge, where wires end. Absolute children are
+ * placed inside the border, so shift them out by its width: otherwise the
+ * wire meets the pin off-centre by exactly the outline weight.
+ */
+.port {
+	margin-top: calc(-1 * var(--gw));
+}
+.port-in {
+	margin-left: calc(-1 * var(--gw));
+}
+.port-out {
+	margin-left: var(--gw);
+}
+
+.insp-straighten {
+	font: inherit;
+	border: 1px solid var(--line);
+	background: none;
+	padding: 3px 8px;
+	border-radius: 6px;
+	color: var(--ink-2);
+}
+:root.style-schematik .insp-straighten {
+	border-radius: 0;
+	border-color: var(--ink-3);
+}
+
+/* ============================================================ curves */
+
+/* The map's curve, like the gamma chart in Schematik's learn.html. */
+.curveplot {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+.curveplot .bg {
+	fill: #141414;
+}
+.curveplot .grid {
+	stroke: #2c2c2a;
+	stroke-width: 1;
+}
+.curveplot text {
+	font-family: var(--mono);
+	font-size: 8px;
+	fill: #8a8984;
+}
+.curveplot .curve {
+	fill: none;
+	stroke: #e8e7e3;
+	stroke-width: 1.4;
+}
+.curveplot .guide {
+	fill: none;
+	stroke: #f2b705;
+	stroke-width: 1;
+	stroke-dasharray: 3 3;
+}
+.curveplot .now {
+	fill: #f2b705;
+	stroke: #141414;
+	stroke-width: 1.5;
+}
+.curveplot .end {
+	fill: #141414;
+	stroke: #e8e7e3;
+	stroke-width: 1.5;
+	cursor: move;
+}
+.insp-curve {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.insp-curve .seg button {
+	padding: 3px 6px;
+	font-size: 0.92em;
+}
+.insp-gamma {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--ink-2);
+	font-family: var(--mono);
+}
+.insp-gamma input {
+	flex: 1;
+	accent-color: var(--ink);
+}
+.insp-gamma b {
+	font-weight: 500;
+	color: var(--ink);
+}
+.cast-curve path {
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.3;
+}
+
+/* ============================================================ logic gate */
+
+/* A block that lays itself out draws over its whole body, from its outer edge, as its ports are placed. */
+.logic-plain {
+	position: absolute;
+	inset: calc(-1 * var(--gw));
+}
+.logic-plain-name {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	padding: 0 10px;
+}
+
+/* The truth table on its side: rows a, b, out, level with the ports; one column per case. */
+.gate {
+	position: absolute;
+	left: 0;
+	right: 0;
+	display: grid;
+	grid-template-columns: auto repeat(4, 1fr) 12px;
+	align-items: stretch;
+	column-gap: 2px;
+	padding: 0 4px 0 12px;
+	font-family: var(--mono);
+	font-size: calc(9px * var(--fs));
+	font-variant-numeric: tabular-nums;
+}
+.gate > * {
+	display: flex;
+	align-items: center;
+}
+.gate-label {
+	color: var(--ink-3);
+	padding-right: 6px;
+}
+.gate-cell {
+	justify-content: center;
+	color: var(--ink-3);
+}
+.gate-cell .is-high {
+	color: var(--ink);
+}
+/* The result row, set off by a rule. */
+.gate-out,
+.gate:not(.is-compact) > .gate-op,
+.gate-arrow {
+	border-top: 1px solid var(--line);
+}
+.gate-arrow {
+	justify-content: flex-end;
+	color: var(--ink-3);
+}
+.gate-cell button {
+	font: inherit;
+	color: var(--ink-3);
+	background: none;
+	border: none;
+	padding: 0 4px;
+	cursor: pointer;
+}
+.gate-cell button.is-high {
+	color: var(--ink);
+	font-weight: 600;
+}
+.gate-cell button:hover {
+	text-decoration: underline;
+}
+/* The case the inputs are in now: one brush stroke down its column. */
+.gate-cell.is-now {
+	background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.gate-a.is-now {
+	border-radius: 3px 3px 0 0;
+}
+.gate-out.is-now {
+	border-radius: 0 0 3px 3px;
+}
+.gate-cell.is-now,
+.gate-cell.is-now .is-high {
+	color: var(--ink);
+}
+
+/* The operator: a quiet dropdown, at every size. */
+.gate-op {
+	position: relative;
+	padding-right: 6px;
+}
+.gate-op select {
+	appearance: none;
+	font: inherit;
+	color: var(--ink);
+	background: none;
+	border: none;
+	border-bottom: 1px dotted var(--ink-3);
+	border-radius: 0;
+	padding: 0 11px 0 0;
+	cursor: pointer;
+}
+.gate-op::after {
+	content: '▾';
+	position: absolute;
+	right: 6px;
+	top: 50%;
+	transform: translateY(-50%);
+	color: var(--ink-3);
+	pointer-events: none;
+}
+.gate.is-compact {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 12px;
+}
+.gate.is-compact .gate-op {
+	font-size: calc(11px * var(--fs));
+}
+
+/* clips: the steps in between, folded away until asked for */
+.clip-toggle {
+	display: flex;
+	align-items: center;
+	width: 100%;
+	padding: 0;
+	border: none;
+	background: none;
+	font-family: var(--mono);
+	font-size: calc(8.5px * var(--fs));
+	color: var(--ink-2);
+	cursor: pointer;
+	text-align: left;
+}
+.clip-toggle:hover {
+	color: var(--ink);
+}
+.clip-row.is-between > span {
+	padding-left: 8px;
+	color: var(--ink-3);
+}
+.insp-curve .seg {
+	display: flex;
+}
+.insp-curve .seg button {
+	flex: 1;
+	white-space: nowrap;
+}
+
+/* ========================================================== history mode */
+
+/* An earlier version, over the live canvas: amber frame, warm paper, a bar that says so. */
+.history {
+	position: absolute;
+	inset: 0;
+	z-index: 400;
+	box-shadow: inset 0 0 0 4px var(--past);
+}
+.history .tl-container {
+	--color-background: var(--past-paper);
+}
+.history .tl-background {
+	background: var(--past-paper);
+}
+/* Look, scrub and play; nothing else answers. */
+.history .tl-html-container * {
+	pointer-events: none !important;
+}
+.history .tl-html-container.clip,
+.history .tl-html-container.clip * {
+	pointer-events: all !important;
+}
+.history-bar {
+	position: absolute;
+	top: 12px;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 500;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	max-width: calc(100% - 32px);
+	padding: 6px 6px 6px 14px;
+	font-size: 13px;
+	color: var(--ink);
+	background: var(--paper);
+	border: 1.5px solid var(--past);
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+}
+.history-bar > span {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.history-bar b {
+	font-weight: 600;
+}
+.history-bar > b:first-child,
+.history-bar span > b:first-child {
+	color: var(--past);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	font-size: 11px;
+}
+.history-bar .glyph {
+	color: var(--past);
+}
+.history-bar button {
+	flex: none;
+	font: inherit;
+	padding: 4px 10px;
+	color: var(--ink);
+	background: none;
+	border: 1px solid var(--line);
+	cursor: pointer;
+}
+.history-bar button:hover {
+	border-color: var(--ink-3);
+}
+.history-bar button.is-primary {
+	color: var(--paper);
+	background: var(--past);
+	border-color: var(--past);
+}
