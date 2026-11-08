@@ -184,6 +184,20 @@ Video is WebRTC, peer to peer. Only signalling goes through the public PeerJS
 broker. Phones need the canvas on an `https://` address (for example a
 deployed build or a tunnel) before they can use their camera.
 
+## Deploying
+
+Every push to `main` builds and publishes to GitHub Pages
+(`.github/workflows/pages.yml`). The repository's Pages source must be set to
+**GitHub Actions**. Serving the branch directly publishes the unbuilt source,
+which fails with a 404 on `/src/main.tsx`. Asset paths are relative, so the
+build works from any sub-path.
+
+tldraw needs a license key on production domains. Without one the editor shows
+for 5 seconds and then disappears, leaving a blank page and a message in the
+console. Get a key for the domain from [tldraw.dev](https://tldraw.dev) and
+store it as the repository variable `TLDRAW_LICENSE_KEY`. Localhost needs no
+key.
+
 ## Known limits
 
 - A running **Wait** keeps its due time in that browser's clock. If a different
