@@ -6,7 +6,7 @@ import { PhoneCamera } from './camera/PhoneCamera'
 import { CustomEditor, editingCustom } from './blocks/CustomEditor'
 import { LogicShapeUtil } from './blocks/LogicShapeUtil'
 import { startRunner } from './blocks/runner'
-import { attachDevice, deviceStatus, logLine } from './device/host'
+import { attachDevice, device, deviceStatus, logLine } from './device/host'
 import { setUpGrid } from './settings'
 import { IO_H, IO_W, sendWireToBack, snap } from './shapes/blocks'
 import { startSampler } from './shapes/history'
@@ -22,6 +22,8 @@ import { PinPicker } from './ui/PinPicker'
 import { SharePanel } from './ui/SharePanel'
 import { WireInspector } from './ui/WireInspector'
 import { HistoryCanvas } from './ui/HistoryCanvas'
+import { ChatPanel } from './ui/ChatPanel'
+import { chatOpen } from './ai/agent'
 import { watchHistory } from './shapes/versions'
 
 const shapeUtils = [IoShapeUtil, LogicShapeUtil, WireShapeUtil, CameraShapeUtil, ClipShapeUtil]
@@ -64,6 +66,7 @@ function Canvas({ roomId }: { roomId: string }) {
 	const [editor, setEditor] = useState<Editor | null>(null)
 	const codeOpen = useValue(codePanelOpen)
 	const customOpen = useValue(editingCustom)
+	const assistantOpen = useValue(chatOpen)
 	const dark = useValue('dark', () => editor?.getColorMode() === 'dark', [editor])
 
 	return (
@@ -76,7 +79,7 @@ function Canvas({ roomId }: { roomId: string }) {
 					components={components}
 					onMount={(e) => {
 						setEditor(e)
-						if (import.meta.env.DEV) Object.assign(window, { editor: e, deviceStatus })
+						if (import.meta.env.DEV) Object.assign(window, { editor: e, deviceStatus, device })
 						if (e.getCurrentPageShapeIds().size === 0 && !e.getShape(createShapeId('starter-button'))) seed(e)
 						const stopGrid = setUpGrid(e)
 						const stopSampler = startSampler(e)
@@ -95,6 +98,7 @@ function Canvas({ roomId }: { roomId: string }) {
 				{editor && <HistoryCanvas editor={editor} shapeUtils={shapeUtils} bindingUtils={bindingUtils} />}
 			</div>
 			{editor && customOpen ? <CustomEditor editor={editor} /> : codeOpen && editor && <CodePanel editor={editor} />}
+			{editor && assistantOpen && <ChatPanel editor={editor} />}
 		</div>
 	)
 }

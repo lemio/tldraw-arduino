@@ -1391,6 +1391,36 @@ button.chip {
 	font-weight: 600;
 }
 
+/* Live ADC readings beside the free analog pins while a board is connected. */
+.picker-scan {
+	pointer-events: none;
+}
+.picker-scan rect {
+	fill: none;
+}
+.picker-scan path {
+	fill: none;
+	stroke: var(--ink-2);
+	stroke-width: 4;
+	stroke-linejoin: round;
+}
+.picker-scan circle {
+	fill: var(--ink-2);
+}
+.picker-scan .is-floating {
+	opacity: 0.3;
+}
+.picker-scan .is-connected rect {
+	fill: rgba(76, 155, 255, 0.1);
+}
+.picker-scan .is-connected path {
+	stroke: var(--accent);
+	stroke-width: 5;
+}
+.picker-scan .is-connected circle {
+	fill: var(--accent);
+}
+
 /* ================================================================ palette */
 
 .palette {
@@ -2442,4 +2472,178 @@ button.chip {
 	color: var(--paper);
 	background: var(--past);
 	border-color: var(--past);
+}
+
+/* ============================================================== assistant */
+
+.chat {
+	width: min(380px, 40vw);
+}
+.code header button.is-on {
+	background: var(--hover);
+}
+.chat-log {
+	flex: 1;
+	overflow: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 8px 16px 12px;
+	font-size: 13px;
+	line-height: 1.45;
+	user-select: text;
+}
+.chat-item {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+/* The person's words, set apart; the assistant's plain; what it did, as a quiet mono log. */
+.chat-user {
+	align-self: flex-end;
+	max-width: 85%;
+	padding: 6px 10px;
+	background: var(--hover);
+}
+.chat-action {
+	font-family: var(--mono);
+	font-size: 11px;
+	color: var(--ink-2);
+	line-height: 1.35;
+	margin: -4px 0;
+}
+.chat-notice,
+.chat-status {
+	font-size: 12px;
+	color: var(--ink-2);
+}
+.chat-item.is-error {
+	color: var(--warn);
+}
+.chat-status::before {
+	content: '';
+	display: inline-block;
+	width: 6px;
+	height: 6px;
+	margin-right: 8px;
+	border-radius: 50%;
+	background: var(--accent);
+	vertical-align: middle;
+	animation: chat-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes chat-pulse {
+	from {
+		opacity: 0.25;
+	}
+}
+.chat-empty {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	color: var(--ink-2);
+}
+.chat-empty p {
+	margin: 0 0 6px;
+}
+.chat-empty button {
+	text-align: left;
+	padding: 6px 10px;
+	border: 1px solid var(--line);
+	background: none;
+	color: var(--ink);
+	font-size: 12px;
+	cursor: pointer;
+}
+.chat-empty button:hover {
+	background: var(--hover);
+}
+.chat-input {
+	display: flex;
+	gap: 6px;
+	align-items: flex-end;
+	padding: 10px 12px 12px 16px;
+	border-top: 1px solid var(--line);
+}
+.chat-input textarea {
+	flex: 1;
+	resize: none;
+	font: inherit;
+	font-size: 13px;
+	padding: 6px 8px;
+	color: var(--ink);
+	background: var(--paper);
+	border: 1px solid var(--line);
+	outline: none;
+}
+.chat-input textarea:focus,
+.chat-key input:focus {
+	border-color: var(--ink-3);
+}
+.chat-input button,
+.chat-key button {
+	height: 30px;
+	padding: 0 12px;
+	border: 1px solid var(--line);
+	background: none;
+	color: var(--ink);
+	font-size: 12px;
+	cursor: pointer;
+}
+.chat-input button.is-primary,
+.chat-key button.is-primary {
+	background: var(--ink);
+	border-color: var(--ink);
+	color: var(--paper);
+}
+.chat-input button:disabled,
+.chat-key button:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+.chat-key {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 8px 16px;
+	font-size: 12px;
+	color: var(--ink-2);
+	line-height: 1.5;
+}
+.chat-key p {
+	margin: 0;
+}
+.chat-key input {
+	font-family: var(--mono);
+	font-size: 12px;
+	padding: 6px 8px;
+	color: var(--ink);
+	background: var(--paper);
+	border: 1px solid var(--line);
+	outline: none;
+}
+.chat-key-actions {
+	display: flex;
+	gap: 6px;
+}
+.chat-fine {
+	color: var(--ink-3);
+}
+.chat-fine a {
+	color: inherit;
+}
+
+/* The assistant's question, above the board in the pin picker. */
+.picker-ask {
+	margin: 0 0 4px;
+	padding: 4px 8px;
+	height: 36px;
+	box-sizing: border-box;
+	overflow: hidden;
+	font-size: 12px;
+	line-height: 14px;
+	color: var(--ink);
+	background: var(--hover);
+}
+.picker-ask b {
+	font-weight: 600;
+	margin-right: 4px;
 }

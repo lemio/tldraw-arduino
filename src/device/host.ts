@@ -1,7 +1,7 @@
 import { Editor, TLShapePartial, atom, react, unsafe__withoutCapture } from 'tldraw'
 import { effectiveValue, writeInputs } from '../shapes/signals'
 import { IO_TYPE, IoShape, isInput } from '../shapes/types'
-import { Device, DeviceState } from './Device'
+import { Device, DeviceState, ScanTelemetry, Telemetry } from './Device'
 
 /*
  * The browser a board is plugged into is its host. The host writes the board's
@@ -30,6 +30,62 @@ export const logLine = (text: string) => device.onLine(text, 'out')
 
 /** Telemetry samples per second, for the status chip. */
 export const telemetryRate = atom('telemetryRate', 0)
+
+/*
+ * Pin scan: while the pin picker is open on a live board, the board reads the
+ * ADC on every analog pin no block uses, so the picker can show what is on
+ * them. Local to this browser.
+ */
+const SCAN_LEN = 150 // about three seconds of telemetry
+const scanSeries = new Map<number, Float32Array>()
+let scanCount = new Map<number, number>()
+/** Bumps once a frame while scan readings arrive. */
+export const scanTick = atom('scanTick', 0)
+/** GPIOs that followed both internal pulls on the last probe: nothing is connected. */
+export const scanFloating = atom<number[]>('scanFloating', [])
+
+/** The latest readings for a scanned pin, oldest first, 0..1. */
+export function getScan(gpio: number): Float32Array | null {
+	const buf = scanSeries.get(gpio)
+	const n = scanCount.get(gpio) ?? 0
+	if (!buf || !n) return null
+	if (n < SCAN_LEN) return buf.subarray(0, n)
+	const i = n % SCAN_LEN
+	const out = new Float32Array(SCAN_LEN)
+	out.set(buf.subarray(i))
+	out.set(buf.subarray(0, i), SCAN_LEN - i)
+	return out
+}
+
+/** Start sampling these pins (an empty list stops). */
+export function scanPins(gpios: number[]) {
+	scanSeries.clear()
+	scanCount = new Map()
+	scanFloating.set([])
+	device.scan(gpios)
+}
+
+let scanFrame = 0
+function takeScan(t: Telemetry) {
+	const d = t as unknown as ScanTelemetry
+	if (!d.s) return
+	for (const [k, raw] of Object.entries(d.s)) {
+		const g = Number(k)
+		let buf = scanSeries.get(g)
+		if (!buf) scanSeries.set(g, (buf = new Float32Array(SCAN_LEN)))
+		const n = scanCount.get(g) ?? 0
+		buf[n % SCAN_LEN] = raw / 65535
+		scanCount.set(g, n + 1)
+	}
+	const f = d.f ?? []
+	const was = scanFloating.get()
+	if (f.length !== was.length || f.some((g, i) => g !== was[i])) scanFloating.set(f)
+	if (!scanFrame)
+		scanFrame = requestAnimationFrame(() => {
+			scanFrame = 0
+			scanTick.update((t) => t + 1)
+		})
+}
 
 const MODE = { din: 'di', ain: 'ai', dout: 'do', aout: 'ao', rgb: 'rgb' } as const
 
@@ -62,6 +118,7 @@ export function attachDevice(editor: Editor) {
 	}
 
 	device.onTelemetry = (d) => {
+		takeScan(d)
 		samples++
 		pending = d
 		if (!frame) frame = requestAnimationFrame(flush)

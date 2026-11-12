@@ -31,11 +31,15 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 export const hasWebSerial = () => typeof navigator !== 'undefined' && 'serial' in navigator
 export const hasWebUsb = () => typeof navigator !== 'undefined' && 'usb' in navigator
 
+/** Pin readings by GPIO; while scanning, also the free pins' ADC and the ones left floating. */
+export type Telemetry = Record<string, number>
+export type ScanTelemetry = { s?: Record<string, number>; f?: number[] }
+
 export class Device {
 	state: DeviceState = hasWebSerial() || hasWebUsb() ? 'disconnected' : 'unsupported'
 	detail = ''
 	onState: (s: DeviceState, detail: string) => void = () => {}
-	onTelemetry: (d: Record<string, number>) => void = () => {}
+	onTelemetry: (d: Telemetry) => void = () => {}
 	onLine: (line: string, kind: 'out' | 'in' | 'sys') => void = () => {}
 
 	private port?: PortLike
@@ -257,6 +261,12 @@ export class Device {
 	drive(values: Record<string, number>) {
 		if (this.state !== 'live' || !Object.keys(values).length) return
 		void this.write(JSON.stringify({ w: values }) + '\n')
+	}
+
+	/** Sample these pins' ADC while no block uses them ([] stops). */
+	scan(pins: number[]) {
+		if (this.state !== 'live') return
+		void this.write(JSON.stringify({ s: pins }) + '\n')
 	}
 
 	/** Run a line of Python typed in the console. */

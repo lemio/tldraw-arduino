@@ -5,6 +5,7 @@ import { BUNDLED_FIRMWARE, hasWebSerial } from '../device/Device'
 import { device, deviceStatus, telemetryRate } from '../device/host'
 import { playback } from '../shapes/playback'
 import { MAX_SECONDS, recording, startRecording, stopRecording } from '../shapes/recorder'
+import { chatOpen } from '../ai/agent'
 
 export const codePanelOpen = atom('codePanelOpen', false)
 
@@ -14,6 +15,7 @@ export const codePanelOpen = atom('codePanelOpen', false)
  */
 export function HardwareBar() {
 	const codeOpen = useValue(codePanelOpen)
+	const assistantOpen = useValue(chatOpen)
 
 	return (
 		<div className="hwbar" onPointerDown={(e) => e.stopPropagation()}>
@@ -26,6 +28,13 @@ export function HardwareBar() {
 				onClick={() => codePanelOpen.set(!codeOpen)}
 			>
 				Code
+			</button>
+			<button
+				className={`hwbar-add${assistantOpen ? ' is-on' : ''}`}
+				title="Ask for features, changes or whole programs; the assistant builds them from blocks"
+				onClick={() => chatOpen.set(!assistantOpen)}
+			>
+				Assistant
 			</button>
 		</div>
 	)

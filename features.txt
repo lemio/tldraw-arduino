@@ -1,0 +1,14 @@
+Simple:
+
+Add a chat box to the right that allows users to request certain features. These will be build by the blocks on the TLDRAW canvas. If some new blocks are needed to achieve the goal they can be created by the AI.
+
+When unsure about what pin the system should take the system could ask the user with the pin choose dialog (similair as on the blocks).
+
+Make sure that the definitions of the blocks also contain how they should be rendered etc, at which zoom levels stuff should be shown in which way etc.
+
+Complex:
+
+Add a display block, which allows to connect a display to the ESP32-S3 (LCD). there should be some UI building tools in the block.
+
+
+

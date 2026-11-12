@@ -2,6 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { TLShapeId, atom, useEditor, useValue } from 'tldraw'
 import { BOARD, BOARD_PINS, BoardPin, pinUnavailable } from '../board/board'
 import { IO_TYPE, IoShape, KIND_INFO } from '../shapes/types'
+import { pinQuestion } from '../ai/askPin'
+import { deviceStatus, getScan, scanFloating, scanPins, scanTick } from '../device/host'
+import { ADC_FULL_SCALE_V } from '../shapes/types'
 
 /** The block whose pin is being chosen. Local to this browser. */
 export const pinPickerFor = atom<TLShapeId | null>('pinPickerFor', null)
@@ -36,8 +39,34 @@ export function PinPicker() {
 	const ref = useRef<HTMLDivElement>(null)
 	const [hover, setHover] = useState<BoardPin | null>(null)
 	const [shown, setShown] = useState(false)
+	const ask = useValue(pinQuestion)
+	const live = useValue('live', () => deviceStatus.get().state === 'live', [])
+	const floating = useValue(scanFloating)
 
 	useLayoutEffect(() => setShown(!!id), [id])
+
+	// On a live board, read the ADC on every analog pin no block uses, so the
+	// picker shows what is connected where.
+	const pin0 = block?.props.pin ?? -1
+	const taken = others.map((o) => o.props.pin)
+	const scan =
+		id && live
+			? BOARD_PINS.filter((p) => p.gpio !== null && p.gpio >= 1 && p.gpio <= 18 && p.gpio !== pin0 && !taken.includes(p.gpio)).map(
+					(p) => p.gpio as number
+				)
+			: []
+	const scanKey = scan.join(',')
+	useEffect(() => {
+		if (!scanKey) return
+		scanPins(scanKey.split(',').map(Number))
+		return () => scanPins([])
+	}, [scanKey])
+	const hoverGpio = hover?.gpio ?? null
+	// Keep the status line's reading live while a scanned pin is hovered.
+	useValue('hover scan', () => (hoverGpio !== null && scanKey.split(',').includes(String(hoverGpio)) ? scanTick.get() : 0), [
+		hoverGpio,
+		scanKey,
+	])
 
 	useEffect(() => {
 		if (!id) return
@@ -85,7 +114,8 @@ export function PinPicker() {
 	const artH = Math.round(Math.max(ART_MIN, Math.min(ART_MAX, (up ? roomAbove : roomBelow) - CHROME)))
 	const scale = artH / BOARD.h
 	const panelW = Math.round((BOARD.w + MARGIN * 2) * scale) + 16
-	const panelH = artH + 36 // padding 6 + status 16 + gap 4 + padding 8 + borders 2
+	const question = ask?.id === id ? ask.question : ''
+	const panelH = artH + 36 + (question ? 40 : 0) // padding 6 + status 16 + gap 4 + padding 8 + borders 2; the assistant's question
 	const chipX = c.left - box.left + c.width / 2
 	const left = Math.min(Math.max(8, c.right - box.left + 10 - panelW), box.width - panelW - 8)
 	const top = up ? chipTop - 8 - panelH : chipBottom + 8
@@ -102,9 +132,15 @@ export function PinPicker() {
 		const why = pinUnavailable(hover, kind)
 		const users = hover.gpio !== null ? usedBy.get(hover.gpio) : undefined
 		const gpio = hover.gpio !== null ? `GPIO ${hover.gpio}` : ''
+		const reading = hover.gpio !== null && scan.includes(hover.gpio) ? getScan(hover.gpio) : null
+		const probe = reading?.length
+			? `${(reading[reading.length - 1] * ADC_FULL_SCALE_V).toFixed(2)} V, ${
+					floating.includes(hover.gpio!) ? 'nothing connected' : 'something connected'
+				}`
+			: ''
 		status = [
 			gpio,
-			why ?? (hover.gpio === pin ? 'click to remove' : users ? `also ${users.join(', ')}` : hover.note),
+			why ?? (hover.gpio === pin ? 'click to remove' : users ? `also ${users.join(', ')}` : probe || hover.note),
 		]
 			.filter(Boolean)
 			.join(' · ')
@@ -119,6 +155,11 @@ export function PinPicker() {
 			onPointerDown={(e) => e.stopPropagation()}
 		>
 			<i className="picker-caret" style={{ left: chipX - left }} />
+			{question && (
+				<p className="picker-ask" title={question}>
+					<b>Assistant</b> {question}
+				</p>
+			)}
 			<p className="picker-status" title={status}>
 				{status}
 			</p>
@@ -157,7 +198,46 @@ export function PinPicker() {
 						</g>
 					)
 				})}
+				{scan.length > 0 && <ScanTraces gpios={scan} floating={floating} />}
 			</svg>
 		</div>
+	)
+}
+
+/** Trace size in artwork px, in the margin beside the header. */
+const TRACE_W = 200
+const TRACE_H = 64
+
+/**
+ * The last seconds of ADC readings beside each free analog pin. Pins that
+ * follow the board's own pull resistors have nothing connected and stay
+ * faint; the others stand out.
+ */
+function ScanTraces({ gpios, floating }: { gpios: number[]; floating: number[] }) {
+	useValue(scanTick)
+	return (
+		<g className="picker-scan">
+			{gpios.map((g) => {
+				const p = BOARD_PINS.find((b) => b.gpio === g)
+				const data = getScan(g)
+				if (!p || !data?.length) return null
+				const left = p.side === 'left'
+				const x0 = left ? -20 - TRACE_W : BOARD.w + 20
+				const top = p.y - TRACE_H / 2
+				const n = data.length
+				const x = (i: number) => x0 + TRACE_W - ((n - 1 - i) / 149) * TRACE_W
+				const y = (v: number) => top + (1 - Math.max(0, Math.min(1, v))) * TRACE_H
+				let d = ''
+				for (let i = 0; i < n; i++) d += `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(data[i]).toFixed(1)}`
+				const free = floating.includes(g)
+				return (
+					<g key={g} className={free ? 'is-floating' : 'is-connected'}>
+						<rect x={x0} y={top} width={TRACE_W} height={TRACE_H} />
+						<path d={d} />
+						<circle cx={x(n - 1)} cy={y(data[n - 1])} r={7} />
+					</g>
+				)
+			})}
+		</g>
 	)
 }

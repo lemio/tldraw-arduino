@@ -47,6 +47,30 @@ The ink follows Tufte's data-ink idea. A wire is a faint line in its net's
 colour until it carries signal. HIGH draws it at full strength, analog sets the
 strength, and a colour wire carries its colour. LOW values are grey.
 
+## Assistant
+
+**Assistant** in the top bar opens a chat on the right. Ask for a feature, a
+change or a whole program in plain words, such as *"when the door opens, fade
+the RGB LED from green to red over ten seconds"*. Claude builds it from blocks
+on the canvas: library blocks where they fit, wire functions for thresholds,
+maps and fades, and new Python blocks when nothing else does the job. It reads
+the canvas first and changes what is there instead of starting over.
+
+When a pin depends on how you will wire your own hardware, the assistant asks:
+the pin picker opens on that block with its question above the board, and you
+choose the pin there. It uses pins you name yourself, the BOOT button and the
+on-board RGB LED without asking.
+
+What it builds is laid out by signal flow beside the existing circuit and
+shared with the room like any other edit. Each request is one undo step.
+
+The assistant uses your own Anthropic API key (**Key** in the chat). Requests
+go straight from your browser to the Claude API (Claude Opus 5.5, `medium`
+effort, with server-side fallback on a declined request) and are billed to
+that key. The key is stored only in your browser, never in the room. The
+conversation is local too: collaborators see the result, not the chat. The
+code is in `src/ai/`.
+
 ## Logic blocks
 
 The palette on the left holds everything that can go on the canvas, grouped by
@@ -163,6 +187,15 @@ pasted once through the raw REPL and takes JSON lines on stdin:
 `{"c":…}` pin config, `{"w":…}` output values, `{"x":…}` Python from the
 console. It replies with `\x1e{json}` telemetry at about 50 Hz. The agent
 is never re-sent when blocks change.
+
+While the pin picker is open on a live board, the browser also sends
+`{"s":[…]}` to scan the free analog pins (1–18 that no block uses). The board
+reads their ADC every cycle, and the picker draws the last three seconds
+beside each pin. A few times a second the board also tries each pin with the
+internal pull-up and then the pull-down. A pin that follows both has nothing
+connected, and its trace stays faint. Every other pin's trace is highlighted.
+Closing the picker sends `{"s":[]}`, which puts the scanned pins back to plain
+inputs without pulls.
 
 The ADC uses 11 dB attenuation (0–3.1 V) and PWM runs at 1 kHz. Allowed pins
 come from the board map. It leaves out GPIO 19/20 (USB), 35–37 (PSRAM) and
