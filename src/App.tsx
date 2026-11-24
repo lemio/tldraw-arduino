@@ -11,6 +11,7 @@ import {
 	useValue,
 } from 'tldraw'
 import { assetStore, registerBookmarks } from './assets'
+import { ContextMenu, WebPageLinks } from './ui/WebPages'
 import { CameraShapeUtil } from './camera/CameraShapeUtil'
 import { PhoneCamera } from './camera/PhoneCamera'
 import { CustomEditor, editingCustom } from './blocks/CustomEditor'
@@ -50,11 +51,13 @@ const components: TLComponents = {
 	TopPanel: HardwareBar,
 	MainMenu,
 	SharePanel,
+	ContextMenu,
 	// On a phone the canvas gets the screen: no menu, the palette button takes its corner.
 	...(isPhone ? { MenuPanel: null } : {}),
 	InFrontOfTheCanvas: () => (
 		<>
 			<Palette />
+			<WebPageLinks />
 			<WireInspector />
 			<PinPicker />
 		</>
