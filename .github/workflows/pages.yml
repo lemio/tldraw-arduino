@@ -29,6 +29,14 @@ jobs:
           # tldraw hides the editor on production domains without a license key.
           # Keys are domain-locked and ship to the browser, so a variable is enough.
           VITE_TLDRAW_LICENSE_KEY: ${{ vars.TLDRAW_LICENSE_KEY }}
+          # Firebase web app config, for image and video uploads. Kept out of the
+          # repository as Actions secrets; it ends up in the built page, as any web app's does.
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

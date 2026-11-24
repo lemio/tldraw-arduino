@@ -1,3 +1,9 @@
 node_modules
 dist
 .DS_Store
+
+# Local settings and keys
+.env.local
+.env.*.local
+# Firebase CLI cache
+.firebase/

@@ -1,0 +1,14 @@
+rules_version = '2';
+
+// DEMO ONLY: anyone can read and write the canvas files, without signing in.
+// Lock this down (Firebase Authentication, per-room paths) before real use.
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Images and videos placed on a canvas.
+    match /assets/{file} {
+      allow read: if true;
+      // Anyone may upload, up to 50 MB a file.
+      allow write: if request.resource == null || request.resource.size < 50 * 1024 * 1024;
+    }
+  }
+}

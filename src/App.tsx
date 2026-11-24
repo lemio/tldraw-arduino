@@ -1,6 +1,16 @@
-import { useSyncDemo } from '@tldraw/sync'
+import { useSync } from '@tldraw/sync'
 import { useState } from 'react'
-import { Editor, TLComponents, Tldraw, createBindingId, createShapeId, useValue } from 'tldraw'
+import {
+	Editor,
+	TLComponents,
+	Tldraw,
+	createBindingId,
+	createShapeId,
+	defaultBindingUtils,
+	defaultShapeUtils,
+	useValue,
+} from 'tldraw'
+import { assetStore, registerBookmarks } from './assets'
 import { CameraShapeUtil } from './camera/CameraShapeUtil'
 import { PhoneCamera } from './camera/PhoneCamera'
 import { CustomEditor, editingCustom } from './blocks/CustomEditor'
@@ -29,6 +39,12 @@ import { isPhone } from './phone'
 
 const shapeUtils = [IoShapeUtil, LogicShapeUtil, WireShapeUtil, CameraShapeUtil, ClipShapeUtil]
 const bindingUtils = [WireBindingUtil]
+
+/** tldraw's free demo server syncs the room; images and videos go to our own storage (assets.ts). */
+const SYNC_HOST = 'https://demo.tldraw.xyz'
+// Fixed for the page's life: useSync reconnects when these change.
+const syncShapeUtils = [...defaultShapeUtils, ...shapeUtils]
+const syncBindingUtils = [...defaultBindingUtils, ...bindingUtils]
 
 const components: TLComponents = {
 	TopPanel: HardwareBar,
@@ -65,7 +81,13 @@ function ensureRoom(params: URLSearchParams) {
 }
 
 function Canvas({ roomId }: { roomId: string }) {
-	const store = useSyncDemo({ roomId: `micropython-canvas-${roomId}`, shapeUtils, bindingUtils })
+	const room = `micropython-canvas-${roomId}`
+	const store = useSync({
+		uri: `${SYNC_HOST}/connect/${encodeURIComponent(room)}`,
+		assets: assetStore,
+		shapeUtils: syncShapeUtils,
+		bindingUtils: syncBindingUtils,
+	})
 	const [editor, setEditor] = useState<Editor | null>(null)
 	const codeOpen = useValue(codePanelOpen)
 	const customOpen = useValue(editingCustom)
@@ -82,6 +104,7 @@ function Canvas({ roomId }: { roomId: string }) {
 					components={components}
 					onMount={(e) => {
 						setEditor(e)
+						registerBookmarks(e, SYNC_HOST)
 						if (import.meta.env.DEV) Object.assign(window, { editor: e, deviceStatus, device })
 						if (e.getCurrentPageShapeIds().size === 0 && !e.getShape(createShapeId('starter-button'))) seed(e)
 						// On a phone, start on what is there rather than wherever the room was left.
