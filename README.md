@@ -47,6 +47,14 @@ The ink follows Tufte's data-ink idea. A wire is a faint line in its net's
 colour until it carries signal. HIGH draws it at full strength, analog sets the
 strength, and a colour wire carries its colour. LOW values are grey.
 
+### On a phone
+
+On a phone the canvas gets the whole screen. tldraw's menu at the top left
+is left out. In its place, the ☰ button opens the palette, which starts
+closed and closes again once a block is added. The view jumps to what is on
+the canvas when the page opens, rather than to wherever the room was last
+looked at.
+
 ## Assistant
 
 **Assistant** in the top bar opens a chat on the right. Ask for a feature, a

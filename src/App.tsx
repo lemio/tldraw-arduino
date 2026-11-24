@@ -25,6 +25,7 @@ import { HistoryCanvas } from './ui/HistoryCanvas'
 import { ChatPanel } from './ui/ChatPanel'
 import { chatOpen } from './ai/agent'
 import { watchHistory } from './shapes/versions'
+import { isPhone } from './phone'
 
 const shapeUtils = [IoShapeUtil, LogicShapeUtil, WireShapeUtil, CameraShapeUtil, ClipShapeUtil]
 const bindingUtils = [WireBindingUtil]
@@ -33,6 +34,8 @@ const components: TLComponents = {
 	TopPanel: HardwareBar,
 	MainMenu,
 	SharePanel,
+	// On a phone the canvas gets the screen: no menu, the palette button takes its corner.
+	...(isPhone ? { MenuPanel: null } : {}),
 	InFrontOfTheCanvas: () => (
 		<>
 			<Palette />
@@ -81,6 +84,8 @@ function Canvas({ roomId }: { roomId: string }) {
 						setEditor(e)
 						if (import.meta.env.DEV) Object.assign(window, { editor: e, deviceStatus, device })
 						if (e.getCurrentPageShapeIds().size === 0 && !e.getShape(createShapeId('starter-button'))) seed(e)
+						// On a phone, start on what is there rather than wherever the room was left.
+						if (isPhone) requestAnimationFrame(() => e.zoomToFit({ animation: { duration: 0 } }))
 						const stopGrid = setUpGrid(e)
 						const stopSampler = startSampler(e)
 						const detach = attachDevice(e)

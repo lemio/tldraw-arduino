@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Editor, TLShapeId, VecLike, useEditor } from 'tldraw'
+import { Editor, TLShapeId, VecLike, atom, useEditor, useValue } from 'tldraw'
+import { isPhone } from '../phone'
 import { CUSTOM_ID, OFFERED, categories, defaultCustomDef } from '../blocks/registry'
 import { logicSize } from '../blocks/layout'
 import { IO_H, IO_W, createCameraBlock, createIoBlock, createLogicBlock, nextDropPoint } from '../shapes/blocks'
@@ -77,6 +78,9 @@ function groups(): { title: string; items: Item[] }[] {
 	]
 }
 
+/** Whether the palette is out. On a phone it starts folded away, to give the canvas the screen. */
+export const paletteOpen = atom('palette open', !isPhone)
+
 /**
  * Everything that can go on the canvas, grouped by what it is. Click to add a
  * block in view, or drag it to where it should go.
@@ -84,6 +88,7 @@ function groups(): { title: string; items: Item[] }[] {
 export function Palette() {
 	const editor = useEditor()
 	const [ghost, setGhost] = useState<{ item: Item; x: number; y: number } | null>(null)
+	const open = useValue(paletteOpen)
 
 	const add = (item: Item, at: VecLike) => {
 		editor.markHistoryStoppingPoint('add block')
@@ -92,6 +97,8 @@ export function Palette() {
 		editor.select(id)
 		if (item.name) editor.setEditingShape(id)
 		item.after?.(id)
+		// On a phone the palette covers the canvas: fold it away to show the new block.
+		if (isPhone) paletteOpen.set(false)
 	}
 
 	const startDrag = (item: Item, e: React.PointerEvent) => {
@@ -117,19 +124,33 @@ export function Palette() {
 
 	return (
 		<>
-			<nav className="palette" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
-				{groups().map((g) => (
-					<section key={g.title}>
-						<h3>{g.title}</h3>
-						{g.items.map((item) => (
-							<button key={item.key} title={item.hint} onPointerDown={(e) => startDrag(item, e)}>
-								<i className={`glyph glyph-${item.glyph}`} />
-								{item.title}
-							</button>
-						))}
-					</section>
-				))}
-			</nav>
+			<button
+				className={`palette-toggle${open ? ' is-open' : ''}`}
+				title={open ? 'Hide the blocks' : 'Show the blocks, to add one to the canvas'}
+				aria-expanded={open}
+				onPointerDown={(e) => e.stopPropagation()}
+				onClick={() => paletteOpen.set(!open)}
+			>
+				<svg viewBox="0 0 16 16" width={14} height={14} aria-hidden>
+					{open ? <path d="M3.5 3.5 L12.5 12.5 M12.5 3.5 L3.5 12.5" /> : <path d="M2 3.5 H14 M2 8 H14 M2 12.5 H14" />}
+				</svg>
+				Blocks
+			</button>
+			{open && (
+				<nav className="palette" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+					{groups().map((g) => (
+						<section key={g.title}>
+							<h3>{g.title}</h3>
+							{g.items.map((item) => (
+								<button key={item.key} title={item.hint} onPointerDown={(e) => startDrag(item, e)}>
+									<i className={`glyph glyph-${item.glyph}`} />
+									{item.title}
+								</button>
+							))}
+						</section>
+					))}
+				</nav>
+			)}
 			{ghost && (
 				<div className="palette-ghost" style={{ left: ghost.x, top: ghost.y }}>
 					<i className={`glyph glyph-${ghost.item.glyph}`} />

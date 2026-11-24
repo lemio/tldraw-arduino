@@ -1442,6 +1442,65 @@ button.chip {
 	color: var(--tl-color-text-1, var(--ink));
 	pointer-events: all;
 }
+/* The palette button: only on a phone, where the palette starts folded away. */
+.palette-toggle {
+	display: none;
+}
+.is-phone .palette-toggle {
+	position: absolute;
+	left: 8px;
+	top: 8px;
+	z-index: 401;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	height: 36px;
+	padding: 0 12px;
+	border: none;
+	border-radius: 10px;
+	background: var(--tl-color-panel, var(--paper));
+	box-shadow: var(--tl-shadow-2);
+	color: var(--tl-color-text-1, var(--ink));
+	font-family: var(--font);
+	font-size: 13px;
+	font-weight: 500;
+	pointer-events: all;
+	cursor: pointer;
+}
+.palette-toggle svg path {
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.6;
+}
+/* A square symbol in the corner; the top bar starts beside it. */
+.is-phone .palette-toggle {
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	justify-content: center;
+	font-size: 0;
+	gap: 0;
+}
+.is-phone .palette-toggle svg {
+	width: 18px;
+	height: 18px;
+}
+.is-phone .hwbar {
+	margin-left: 48px;
+	max-width: calc(100vw - 48px - 120px);
+}
+.is-phone .palette {
+	top: 56px;
+	width: min(220px, calc(100vw - 16px));
+	/* clear of tldraw's toolbar and its undo bar at the bottom */
+	max-height: calc(100% - 56px - 172px);
+}
+.is-phone .palette button {
+	min-height: 36px;
+}
+:root.style-schematik.is-phone .palette-toggle {
+	border-radius: 0;
+}
 .palette section + section {
 	margin-top: 6px;
 }
