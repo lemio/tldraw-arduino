@@ -6,6 +6,8 @@ import {
 	ShapeUtil,
 	T,
 	TLResizeInfo,
+	createShapePropsMigrationIds,
+	createShapePropsMigrationSequence,
 	TLShapeUtilCanBindOpts,
 	stopEventPropagation,
 	useEditor,
@@ -13,10 +15,13 @@ import {
 } from 'tldraw'
 import type { Tier } from '../blocks/define'
 import { simpler } from '../blocks/layout'
-import { detailZoom, headHeight, look, outlineW } from '../style'
+import { detailZoom, headHeight, look, netColour, outlineW } from '../style'
+import { isPlc, iecOfIo, ioAddress } from '../plc/iec'
 import { pinPickerFor } from '../ui/PinPicker'
 import { Port } from '../ui/Port'
 import { Sparkline } from '../ui/Sparkline'
+import { ContactSymbol, DeviceIcon } from '../ui/ContactSymbol'
+import { flip, isMomentary, pressHandlers, restValue, tap } from './inputControl'
 import { GRID, IO_H, IO_W, snapResize, snapToGrid } from './blocks'
 import { playback, recordedValue } from './playback'
 import { blockPorts, effectiveValue, fmtColour, getIncomingWire, writeInputs } from './signals'
@@ -27,16 +32,34 @@ import {
 	IO_TYPE,
 	IoKind,
 	IoShape,
+	DEVICE_INFO,
+	INPUT_DEVICES,
+	InputDevice,
 	KIND_INFO,
 	Pull,
 	SUPPLY_V,
 	WIRE_TYPE,
+	isContact,
 	isInput,
 	signalType,
 } from './types'
 
+const versions = createShapePropsMigrationIds(IO_TYPE, { AddDevice: 1 })
+/** Inputs from before devices read their pin as it is. */
+const ioMigrations = createShapePropsMigrationSequence({
+	sequence: [
+		{
+			id: versions.AddDevice,
+			up(props: Record<string, unknown>) {
+				props.device ??= 'signal'
+			},
+		},
+	],
+})
+
 export class IoShapeUtil extends ShapeUtil<IoShape> {
 	static override type = IO_TYPE
+	static override migrations = ioMigrations
 	static override props: RecordProps<IoShape> = {
 		kind: T.literalEnum(...IO_KINDS),
 		w: T.number,
@@ -47,6 +70,7 @@ export class IoShapeUtil extends ShapeUtil<IoShape> {
 		unit: T.literalEnum('raw', 'volt', 'pct'),
 		value: T.number,
 		live: T.boolean,
+		device: T.literalEnum(...INPUT_DEVICES),
 	}
 
 	getDefaultProps(): IoShape['props'] {
@@ -60,6 +84,7 @@ export class IoShapeUtil extends ShapeUtil<IoShape> {
 			unit: 'raw',
 			value: 0,
 			live: false,
+			device: 'signal',
 		}
 	}
 
@@ -102,11 +127,16 @@ export class IoShapeUtil extends ShapeUtil<IoShape> {
 
 function IoBlock({ shape }: { shape: IoShape }) {
 	const editor = useEditor()
-	const { kind, w, h, label, pin, pull, unit, live } = shape.props
+	const { kind, w, h, label, pin, pull, unit, live, device } = shape.props
 	const input = isInput(kind)
 	const digital = signalType(kind) === 'digital'
+	// A button or switch: drawn as its contact, and worked like the real thing.
+	const contact = kind === 'din' && isContact(device)
+	const info = kind === 'din' ? DEVICE_INFO[device] : KIND_INFO[kind]
 
 	const value = useValue('value', () => effectiveValue(editor, shape.id), [editor, shape.id])
+	// The colour of the wire leaving this input, for the pin side of its contact.
+	const net = useValue('net', () => (kind === 'din' ? netColour(editor, shape.id, '') : ''), [editor, shape.id, kind])
 	const wired = useValue(
 		'wired',
 		() => !input && !!getIncomingWire(editor, shape.id),
@@ -116,6 +146,7 @@ function IoBlock({ shape }: { shape: IoShape }) {
 	const picking = useValue('picking', () => pinPickerFor.get() === shape.id, [shape.id])
 	const isOnlySelected = useValue('selected', () => editor.getOnlySelectedShapeId() === shape.id, [editor, shape.id])
 	const conflict = useValue('conflict', () => pinConflict(editor, shape), [editor, shape])
+	const plc = useValue('plc', () => isPlc(editor), [editor])
 
 	// While scrubbing a recording, recorded blocks show the past and can't be touched.
 	const replaying = useValue(
@@ -143,7 +174,7 @@ function IoBlock({ shape }: { shape: IoShape }) {
 	}
 
 	const units = UNITS[kind]
-	const shown = formatValue(kind, unit, value)
+	const shown = formatValue(kind, unit, value, plc)
 
 	/*
 	 * The block sheds detail as it shrinks (heights step by 32 px):
@@ -155,12 +186,13 @@ function IoBlock({ shape }: { shape: IoShape }) {
 	useValue(look)
 	const zoom = useValue('zoom', () => detailZoom(editor.getZoomLevel()), [editor])
 	const tier = simpler(ioTier(h), ioTier(h * zoom))
-	const name = label || `Unnamed ${KIND_INFO[kind].title.toLowerCase()}`
+	const name = label || `Unnamed ${info.title.toLowerCase()}`
 	const showSlider = tier === 'full' && manual && !digital
 	// The sparkline gets whatever the widest possible value leaves over.
 	const valueFont = VALUE_FONT[tier]
 	const padX = tier === 'value' ? 20 : 24
-	const sparkW = w - padX - 8 - (kind === 'rgb' ? (tier === 'full' ? 96 : 32) : maxValueWidth(kind, unit, valueFont))
+	const symbolW = contact && tier !== 'value' ? 56 : 0
+	const sparkW = w - padX - 8 - symbolW - (kind === 'rgb' ? (tier === 'full' ? 96 : 32) : maxValueWidth(kind, unit, valueFont, plc))
 	// What's left after the outline, padding and the (scaled) header.
 	const chrome = 2 * outlineW() + headHeight()
 	const sparkH = tier === 'full' ? h - chrome - (showSlider ? 38 : 22) : tier === 'name' ? h - chrome - 18 : h - 2 * outlineW() - 8
@@ -169,17 +201,18 @@ function IoBlock({ shape }: { shape: IoShape }) {
 	const dragSpark = manual && !digital && !showSlider
 	const chips = tier === 'full' ? (w * zoom >= 224 ? 'all' : w * zoom >= 144 ? 'pin' : 'none') : 'none'
 
+	const momentary = kind === 'din' && isMomentary(device)
 	const valueAction =
-		manual && digital ? 'Click to switch' : units.length > 1 ? 'Click to change units' : undefined
+		manual && digital ? (momentary ? 'Click to press' : 'Click to switch') : units.length > 1 ? 'Click to change units' : undefined
 	const onValueClick = () => {
-		if (manual && digital) return setValue(value >= 0.5 ? 0 : 1)
+		if (manual && digital) return momentary ? tap(editor, shape) : flip(editor, shape)
 		if (units.length > 1) set({ unit: units[(units.indexOf(unit) + 1) % units.length] })
 	}
 
 	const nameEl = isEditing ? (
 		<NameInput
 			value={label}
-			placeholder={KIND_INFO[kind].example}
+			placeholder={info.example}
 			onCommit={(v) => v !== label && set({ label: v })}
 			onDone={() => editor.setEditingShape(null)}
 		/>
@@ -189,7 +222,7 @@ function IoBlock({ shape }: { shape: IoShape }) {
 		<span
 			className={`io-label${label ? '' : ' is-unnamed'}${isOnlySelected ? ' is-renamable' : ''}`}
 			style={isOnlySelected ? { pointerEvents: 'all' } : undefined}
-			title={isOnlySelected ? 'Click to name what this really is' : `${KIND_INFO[kind].hint}. Double-click to name it.`}
+			title={isOnlySelected ? 'Click to name what this really is' : `${info.hint}. Double-click to name it.`}
 			onPointerDown={(e) => isOnlySelected && onClickNotDrag(e, () => editor.setEditingShape(shape.id))}
 		>
 			{name}
@@ -230,11 +263,30 @@ function IoBlock({ shape }: { shape: IoShape }) {
 						<span className="io-chips">
 							{kind === 'din' && chips === 'all' && (
 								<ChipSelect
+									value={device}
+									className="chip-device"
+									title={`${DEVICE_INFO[device].title}. ${DEVICE_INFO[device].hint}. Click to change.`}
+									shown={<DeviceIcon device={device} />}
+									options={INPUT_DEVICES.map((d) => [d, DEVICE_INFO[d].title])}
+									onChange={(v) => {
+										const d = v as InputDevice
+										// Contacts are wired to GND on the pull-up, and start at rest.
+										set({ device: d, ...(isContact(d) ? { pull: 'up' as Pull } : {}), ...(live ? {} : { value: restValue(d) }) })
+									}}
+								/>
+							)}
+							{kind === 'din' && !contact && chips === 'all' && (
+								<ChipSelect
 									value={pull}
-									title="Pull resistor — pull-up reads HIGH until a button connects the pin to GND"
+									title="Pull resistor — pull-up reads HIGH until a button connects the pin to ground (⏚)"
 									options={PULLS}
 									onChange={(v) => set({ pull: v as Pull })}
 								/>
+							)}
+							{plc && pin >= 0 && chips === 'all' && (
+								<span className="chip chip-address" title={`IEC address of GPIO ${pin} · ${iecOfIo(kind)}`}>
+									{ioAddress(kind, pin)}
+								</span>
 							)}
 							<button
 								className={`chip${conflict ? ' chip-warn' : ''}${pin < 0 ? ' chip-unset' : ''}${picking ? ' is-open' : ''}`}
@@ -256,6 +308,16 @@ function IoBlock({ shape }: { shape: IoShape }) {
 					nameEl
 				) : (
 					<>
+						{contact && tier !== 'value' && (
+							<ContactSymbol
+								device={device}
+								closed={value >= 0.5}
+								net={net}
+								active={manual}
+								title={manual ? (momentary ? 'Hold to press' : 'Click to switch') : DEVICE_INFO[device].hint}
+								{...pressHandlers(editor, shape)}
+							/>
+						)}
 						{showSpark &&
 							(dragSpark ? (
 								<SparkControl onChange={setValue}>
@@ -324,11 +386,11 @@ const VALUE_FONT = { full: 26, name: 22, value: 17 }
 /** Width of the widest value a block of this kind could show, measured in its own font. */
 const widthCache = new Map<string, number>()
 document.fonts?.addEventListener('loadingdone', () => widthCache.clear())
-function maxValueWidth(kind: IoKind, unit: AnalogUnit, size: number) {
-	const key = `${kind}:${unit}:${size}`
+function maxValueWidth(kind: IoKind, unit: AnalogUnit, size: number, plc = false) {
+	const key = `${kind}:${unit}:${size}:${plc}`
 	let w = widthCache.get(key)
 	if (w === undefined) {
-		const widest = (['din', 'dout'].includes(kind) ? [0, 1] : [1]).map((v) => formatValue(kind, unit, v))
+		const widest = (['din', 'dout'].includes(kind) ? [0, 1] : [1]).map((v) => formatValue(kind, unit, v, plc))
 		const ctx = document.createElement('canvas').getContext('2d')!
 		const measure = (text: string, px: number, weight: number) => {
 			ctx.font = `${weight} ${px}px "IBM Plex Sans", system-ui, sans-serif`
@@ -457,16 +519,24 @@ function ChipSelect({
 	onChange,
 	title,
 	warn,
+	shown,
+	className,
 }: {
 	value: string
 	options: [string, string][]
+	/** Shown in place of the option's text: a symbol. */
+	shown?: React.ReactNode
+	className?: string
 	onChange(v: string): void
 	title?: string
 	warn?: string | null
 }) {
-	const current = options.find(([v]) => v === value)?.[1] ?? value
+	const current = shown ?? options.find(([v]) => v === value)?.[1] ?? value
 	return (
-		<label className={`chip${warn ? ' chip-warn' : ''}${value === '-1' ? ' chip-unset' : ''}`} title={title}>
+		<label
+			className={`chip${warn ? ' chip-warn' : ''}${value === '-1' ? ' chip-unset' : ''}${className ? ' ' + className : ''}`}
+			title={title}
+		>
 			{current}
 			<select
 				value={value}
@@ -500,8 +570,8 @@ const UNITS: Record<IoKind, AnalogUnit[]> = {
 	aout: ['pct', 'volt'],
 }
 
-function formatValue(kind: IoKind, unit: AnalogUnit, v: number): { main: string; unit?: string } {
-	if (kind === 'din' || kind === 'dout') return { main: v >= 0.5 ? 'HIGH' : 'LOW' }
+function formatValue(kind: IoKind, unit: AnalogUnit, v: number, plc = false): { main: string; unit?: string } {
+	if (kind === 'din' || kind === 'dout') return { main: plc ? (v >= 0.5 ? 'TRUE' : 'FALSE') : v >= 0.5 ? 'HIGH' : 'LOW' }
 	if (kind === 'rgb') return { main: fmtColour(v) }
 	if (kind === 'ain') {
 		if (unit === 'volt') return { main: (v * ADC_FULL_SCALE_V).toFixed(2), unit: 'V' }

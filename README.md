@@ -21,9 +21,9 @@ npm run dev        # http://localhost:5173 — Chrome or Edge for the board
 
 | | |
 |---|---|
-| **Digital in / Analog in** | Reads a pin. Shows the value large, with a 10-second sparkline. With no board streaming, you click or drag the block to simulate it. |
+| **Digital input / Analog input** | Reads a pin. Shows the value large, with a 10-second sparkline. With no board streaming, you click or drag the block to simulate it. |
 | **Digital out / Analog out** | Drives a pin. With no wire attached, you click it (digital) or drag its slider (PWM) to puppeteer it. |
-| **Naming** | A new block starts unnamed and opens straight into naming, with a prompt such as *e.g. Door switch*. Name it after the real thing it controls. Click the name of a selected block, double-click the block, or press Enter to rename it. Names become the variable names in `main.py`. |
+| **Naming** | A new block starts unnamed and opens straight into naming, with a prompt such as *For example: Door switch*. Name it after the real thing it controls. Click the name of a selected block, double-click the block, or press Enter to rename it. Names become the variable names in `main.py`. |
 | **Pins** | Click the GPIO chip to pick the pin on the board itself: the ESP32-S3-DevKitC-1 PCBMAP from the Schematik project (`src/board/`). Rows the block can't use are dimmed, and hovering says why (USB, UART0, PSRAM, power, not analog). Pins in use carry their block's name beside the header. |
 | **Compact blocks** | Zooming out below 75 % simplifies blocks the same way shrinking them does. Shrink a block to show less: at 64 px tall only the name and the value, at 32 px only the value (hover for the name and pin). The sparkline stays at every size and is hidden only when the block is too narrow to fit it next to the widest value it could show. When a block is too small for its slider, drag up or down on the sparkline to puppeteer it. Click a digital value to switch it; drag from anywhere to move the block. |
 | **Grid** | tldraw's own **Show grid** preference controls it: while it's on (the default; your choice is remembered across rooms), the 16 px grid is drawn, and blocks, cameras and clips snap to it when moved, resized or added. A block is 240 × 96, so ports land on grid lines and aligned blocks get a straight wire. Turn it off and everything moves freely; **Always snap** still aligns to other shapes, as usual in tldraw. |
@@ -110,12 +110,49 @@ or **+** pulse an input. Anyone in the room can press them.
 In a shared room, one browser runs the logic and writes the outputs into the
 shared store: the browser the board is plugged into, or else the present
 person with the lowest user id. Everyone sees the same values. Block state
-(`b.state`, e.g. a Variable's count) lives in the store too. It survives
+(`b.state`, for example a Variable's count) lives in the store too. It survives
 reloads and carries over into `main.py`.
+
+### Buttons and switches
+
+Inputs come in specific kinds: **Push button, normally open**, **Push button,
+normally closed**, **Toggle switch**, plain **Digital input** (a sensor, read
+as its pin level) and **Analog input**. The palette and the chip on a digital
+input show each kind as its contact symbol; click the chip to switch kinds.
+Words are written out in full throughout: the full name, or a symbol, rather
+than an abbreviation.
+
+Buttons and switches are contacts wired between the pin and ground (⏚), on the
+internal pull-up. They read as the contact, TRUE while it is closed, so there
+is no inverting to think about:
+
+- A **normally open** button is TRUE while pressed.
+- A **normally closed** button is TRUE at rest and FALSE while pressed. That is how a stop
+  button should behave, because a broken wire then reads as "stop".
+- A **toggle switch** stays where it was put.
+
+The block draws its contact as a live schematic symbol (after IEC 60617):
+the blade lies closed or stands open. With no board streaming, the symbol is
+the control. Hold it to press a push button, and it springs back when you let
+go. Click it to flip a toggle switch. `main.py` reads contacts the same way
+(`1 - pin.value()`), and the BOOT button on a fresh canvas is a normally open button.
+Inputs in older rooms stay plain digital inputs.
+
+**Sticky inputs and outputs.** Click the pin next to *Inputs* or *Outputs* in
+the palette (or use *Preferences › Keep inputs and outputs at the edges*).
+Every input that scrolls out of view, or slips under the palette, is then held
+at the left edge as a small card, level with where its block is. Every output
+is held the same way at the right edge, below tldraw's style panel. An input
+card works like its block: hold a button, flip a switch, slide a knob. An
+output card shows what the output is doing: a lamp lit in its wire's colour,
+a level, or a colour. An output that no wire drives can be switched or slid
+from its card. Click a card's name to go to the block. This way you can press
+the buttons and watch the lamps while you work on the program in between. The
+setting is per person, and it is off until you turn it on.
 
 ### Writing a block
 
-**On the canvas.** Add a **Python block**. Give it ports, e.g.
+**On the canvas.** Add a **Python block**. Give it ports, for example
 `trigger:digital, seconds:number=5 s`, and an `update(b)`. It runs as you type,
 and errors appear on the block. **Copy as library block** gives you the file
 for the next step.
@@ -157,6 +194,72 @@ Blocks get the three sizes automatically. To draw your own, add `render: { full,
 name, value }` with React components; the frame, name and ports stay standard.
 Give `fullHeight` if the full drawing needs room (see
 `src/blocks/library/display/gauge.tsx`). A library file may be `.tsx`.
+
+## PLC mode
+
+**PLC** in the top bar turns the canvas into an IEC 61131-3 Function Block
+Diagram, for everyone in the room. The palette swaps the maker blocks for the
+standard PLC library. Each block is listed under its full name, with its IEC
+code beside it (or its symbol: ≥ & + ÷ …). The code is still what goes into the
+Structured Text. Hover over a port, such as PT, to see its full name (preset time):
+
+| Group | Blocks |
+| --- | --- |
+| Bit logic | AND, OR, XOR, NOT |
+| Edges | R_TRIG, F_TRIG |
+| Bistables | SR (set wins), RS (reset wins) |
+| Timers | TON, TOF, TP |
+| Counters | CTU, CTD, CTUD |
+| Compare | GT, GE, EQ, NE, LE, LT |
+| Arithmetic | ADD, SUB, MUL, DIV |
+| Selection | SEL, MAX, MIN, LIMIT |
+| Conversion | SCALE_X, NORM_X, REAL_TO_INT, REAL_TO_TIME |
+| Control | PID (the inputs of the CODESYS Util PID) |
+
+It runs the way a PLC runs:
+
+- **Scan cycle.** Every 50 ms the inputs are read, every block runs once,
+  and then the outputs are written. Blocks run in execution order: top to
+  bottom, then left to right, and always after the blocks feeding them. The
+  number on each block is its place in the scan. A feedback loop reads the
+  value from the previous scan.
+- **Typed wires.** Every port is BOOL, INT, REAL, TIME or DWORD, and its glyph
+  shows which. A wire carries its value unchanged. INT and TIME may widen into
+  REAL; any other mismatch is a type error. The wire shows a red badge such
+  as `REAL → INT ✕`, and the input falls back to its own constant until a
+  conversion block goes in between. Wire functions (threshold, invert,
+  toggle, map) are switched off, because a PLC does those jobs with blocks
+  (GT, NOT, SR, SCALE_X).
+- **The IEC definitions.** Timers measure real time between scans, so the
+  cycle time doesn't change them. Counters count rising edges and keep CV
+  within INT. R_TRIG and F_TRIG are TRUE for exactly one scan. F_TRIG follows
+  the standard to the letter: if CLK starts FALSE, it fires once on its first
+  scan.
+- **▶ Running / ■ Stopped.** Stopping halts the scan and switches every output off.
+  Function blocks keep their instance data. Running again carries on from there.
+- **I/O.** Digital pins are BOOL at bit addresses derived from the GPIO
+  (`%IX0.4` is GPIO 4, `%QX1.5` is GPIO 13). Analog channels are REAL 0.0–1.0
+  at `%IW`/`%QW`. The address shows on each IO block.
+
+Zooming works as everywhere else. At full size a block is an online view,
+with every input and output showing its value (`TRUE`, `T#1s500ms`, `0.8`).
+Timers and counters also get a bar for ET of PT and CV of PV. Zoomed out, a
+block shows its name and its main value with a sparkline. Fully zoomed out, it
+shows its type (TON) and its main value.
+
+With PLC mode on, **Code** has two tabs:
+
+- **`PLC_PRG.st`** is the program as Structured Text: VAR declarations with
+  `AT %IX…` addresses, FB instances, and the calls in execution order. You
+  can paste it into CODESYS or OpenPLC.
+- **`main.py`** is what the board runs. It has the same scan structure:
+  input image, then the program, then the outputs, at a fixed 50 ms cycle.
+  Downloading is a cold start: function blocks begin with fresh instance
+  data.
+
+The assistant knows PLC mode. It builds with IEC blocks, keeps to the typing,
+and inserts a conversion where types differ. Turning PLC mode off brings
+back the maker palette and every wire's own function, so nothing is lost.
 
 ## Recording costs
 
@@ -205,8 +308,17 @@ come from the board map. It leaves out GPIO 19/20 (USB), 35–37 (PSRAM) and
 
 The `?room=…` part of the URL is the room, so sharing the link (the **Invite**
 button copies it) shares the canvas. Sync uses tldraw's `useSyncDemo`, a free
-public server. It suits trying things out, not keeping work: rooms are not
-private and do not last forever. For real use, run your own
+public server. It suits trying things out: rooms are not private and do not
+last forever.
+
+**Saving a room.** **Save**, beside Invite, names the room and keeps a full
+copy of its canvas in this browser. **Copy link to share** gives a link that
+carries that copy along. It opens the same room, so everyone who opens it works
+together. If the sync server has forgotten the room by then, the saved copy is
+put back first. A room that still has its canvas is left as the people in it
+left it. Saving again updates the copy. The link of a small canvas is
+about 1.5 kB; for a large one, **Download ↓** gives a `.room.json` file, and
+**Open a room file…** opens one. Saved rooms are listed in the same panel. For real use, run your own
 [tldraw sync server](https://tldraw.dev/docs/sync) and switch to `useSync`.
 
 The browser the board is plugged into is its **host**. It writes readings into
@@ -233,8 +345,9 @@ key.
 
 ## Known limits
 
-- A running **Wait** keeps its due time in that browser's clock. If a different
-  browser takes over running the blocks mid-countdown, the countdown is off.
+- A running **Wait**, or a PLC timer, keeps its start time in that browser's
+  clock. If a different browser takes over running the blocks mid-countdown,
+  the countdown is off.
 - Only one board per room is expected. Two hosts would both write the
   same input blocks.
 - Production deploys of tldraw need a [license key](https://tldraw.dev/pricing).
@@ -245,7 +358,8 @@ key.
 ## Layout
 
 ```
-src/blocks/    logic blocks: definition API, library/, MicroPython runtime + in-browser runner, Python block editor
+src/blocks/    logic blocks: definition API, library/ (plc/ holds the IEC blocks), execution order, MicroPython runtime + in-browser runner, Python block editor
+src/plc/       PLC mode: IEC types and addresses, port helpers, Structured Text generator
 src/board/     the DevKitC-1 pin map (from the Schematik project)
 src/shapes/    IO block, wire + binding, signals & casts, sparkline history, wiring drag
 src/device/    Web Serial device, on-board agent, host bridge, main.py codegen, reset lines

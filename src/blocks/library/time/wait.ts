@@ -10,7 +10,7 @@ export default defineBlock({
 	category: 'Time',
 	title: 'Wait',
 	description: 'Goes HIGH a set time after it is triggered, like an alarm clock',
-	example: 'e.g. Wake-up alarm',
+	example: 'For example: Wake-up alarm',
 	inputs: [
 		{ id: 'start', type: 'digital' },
 		{ id: 'seconds', type: 'number', default: 5, unit: 's' },

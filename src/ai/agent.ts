@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { Editor, TLShapeId, atom } from 'tldraw'
 import { TOOLS, arrange, describeCanvas, describeLibrary, describePins, runTool } from './tools'
+import { CYCLE_MS, isPlc } from '../plc/iec'
 
 /*
  * The assistant: Claude, called straight from this browser with the person's
@@ -63,7 +64,25 @@ function appendText(delta: string) {
 	else chatLog.set([...log, { kind: 'assistant', text: delta }])
 }
 
-function systemPrompt() {
+/**
+ * In PLC mode the canvas is an IEC 61131-3 Function Block Diagram; the
+ * assistant builds with the IEC library and keeps to its typing.
+ */
+function plcPrompt() {
+	return `PLC mode is ON
+Where this section differs from the advice above (wire functions, logic.gate, how signals cast), this section wins.
+This canvas is a PLC program, an IEC 61131-3 Function Block Diagram. Build the way a controls engineer would, with the IEC blocks listed under Library blocks (TON, CTU, SR, R_TRIG, GT, SCALE_X…), using their formal parameter names as port ids (IN, PT, Q, ET, CU, PV, CV…).
+- Every port has an IEC type: BOOL, INT, REAL, TIME (milliseconds) or DWORD. A wire carries a value unchanged and must join the same type; INT and TIME may also go into REAL. Anything else is a type error: put a block in between (GT/LT to make a BOOL from a number, SEL to make a number from a BOOL, plc.real_to_int, plc.real_to_time).
+- Wires have no functions in PLC mode: don't pass "function" to connect. Thresholds, inverting, toggling and latching are blocks (GT, NOT, SR/RS, CTU…).
+- IO blocks are the PLC's I/O: din is a BOOL input (%IX), ain a REAL input 0.0–1.0 (%IW), dout a BOOL output (%QX), aout a REAL output 0.0–1.0 (%QW).
+- Set constants on unconnected inputs with params, in the port's own unit: PT in milliseconds (5000 for T#5s), PV as a whole number.
+- The program runs as a scan cycle every ${CYCLE_MS} ms: inputs are read, every block runs once in execution order (top to bottom, each after what feeds it), outputs are written. Lay blocks out top to bottom in the order they should run.
+- Avoid Python blocks unless no IEC block can do the job.
+- Name function block instances after their job ("Start delay", "Bottle count").`
+}
+
+function systemPrompt(editor: Editor) {
+	const plc = isPlc(editor)
 	return `You help people build interactive electronics with an ESP32-S3-DevKitC-1 on a visual canvas. Each block on the canvas is real hardware or a small piece of logic; wires carry signals between them. The canvas runs live in a MicroPython simulator in the browser and is compiled to main.py for the board, so whatever you build works at once.
 
 People ask for features, changes or whole programs in plain words. Build them on the canvas with your tools, then say in one to three sentences what you made and how to try it (which button to press, what to watch). Write for makers and students, not programmers: name things after what they are in the project ("Door switch", "Wake-up alarm"), not after block types.
@@ -72,6 +91,7 @@ How to build
 - Read the <canvas> in each message first and change what is there rather than duplicating it. Reuse blocks already on the canvas when they fit.
 - Prefer library blocks and wire functions. Wires do a lot on their own: thresholds, inverting, toggling on a press, mapping ranges, gamma and easing curves, fading between two colours. Only create a Python block when nothing else does the job; keep it small and give it clear port names.
 - Pins: use the pin the person named. The DevKit's BOOT button is GPIO 0 and its RGB LED is GPIO 38, so use those without asking when the person means them. When the pin depends on how they will wire their own hardware and they didn't say, use pin "ask": they pick it on a drawing of the board, so add a short question. Ask one pin at a time, in the order a person would wire them. Use "auto" only for blocks where any free pin is fine.
+- Buttons and switches: give din blocks a device. "no" for a push button (TRUE while pressed; the BOOT button is one), "nc" for a normally-closed button such as a stop button (TRUE at rest, FALSE while pressed), "toggle" for a switch that stays put. These are wired between the pin and GND and read as the contact, so pressed means HIGH/TRUE without any inverting. Use "signal" for sensors read as their pin level.
 - An input takes one wire. To combine two HIGH/LOW signals, use logic.gate; its "table" setting is four bits where bit (2a+b) is the output: AND=8, OR=14, XOR=6, NAND=7, NOR=1, XNOR=9.
 - After adding Python, check the returned error and fix it.
 - If the request is unclear in a way that changes what you'd build, ask one short question instead of guessing.
@@ -93,7 +113,7 @@ Board pins (ESP32-S3-DevKitC-1 headers)
 ${describePins()}
 
 Library blocks
-${describeLibrary()}`
+${describeLibrary(plc)}${plc ? `\n\n${plcPrompt()}` : ''}`
 }
 
 /** Make sense of an API error for the chat. */
@@ -137,7 +157,7 @@ export async function sendChat(editor: Editor, text: string) {
 				betas: ['server-side-fallback-2026-07-01'],
 				fallbacks: 'default',
 				cache_control: { type: 'ephemeral' },
-				system: systemPrompt(),
+				system: systemPrompt(editor),
 				tools: TOOLS,
 				messages: history,
 			})

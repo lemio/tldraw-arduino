@@ -12,10 +12,15 @@ import {
 	inputValue,
 	outputValue,
 	portPagePoint,
+	wireTypeError,
 } from '../shapes/signals'
+import type { PortSpec } from '../blocks/define'
+import { iecCompatible, iecOfSignal, isPlc } from '../plc/iec'
 import {
+	INPUT_DEVICES,
 	IO_KINDS,
 	IO_TYPE,
+	InputDevice,
 	IoKind,
 	IoShape,
 	KIND_INFO,
@@ -91,12 +96,14 @@ const fmt = (v: number) => Math.round(v * 1000) / 1000
 export function describeCanvas(editor: Editor) {
 	const blocks: Json[] = []
 	const wires: Json[] = []
+	const plc = isPlc(editor)
 	for (const s of editor.getCurrentPageShapesSorted()) {
 		if (s.type === IO_TYPE) {
 			const b = s as IoShape
 			blocks.push({
 				id: short(b.id),
 				kind: b.props.kind,
+				device: b.props.kind === 'din' ? b.props.device : undefined,
 				label: b.props.label,
 				pin: b.props.pin,
 				value: fmt(isInput(b.props.kind) ? outputValue(editor, b, '', true) : inputValue(editor, b, '', true)),
@@ -113,11 +120,15 @@ export function describeCanvas(editor: Editor) {
 				label: b.props.label,
 				inputs: def.inputs.map((p) => ({
 					id: p.id,
-					type: p.type,
+					type: plc ? (p.iec ?? iecOfSignal(p.type)) : p.type,
 					wired: !!getIncomingWire(editor, b.id, p.id),
 					value: fmt(inputValue(editor, b, p.id, true)),
 				})),
-				outputs: def.outputs.map((p) => ({ id: p.id, type: p.type, value: fmt(outputValue(editor, b, p.id, true)) })),
+				outputs: def.outputs.map((p) => ({
+					id: p.id,
+					type: plc ? (p.iec ?? iecOfSignal(p.type)) : p.type,
+					value: fmt(outputValue(editor, b, p.id, true)),
+				})),
 				params: Object.keys(b.props.params).length ? b.props.params : undefined,
 				python: custom?.python,
 				error: b.props.error || undefined,
@@ -135,7 +146,8 @@ export function describeCanvas(editor: Editor) {
 				id: short(w.id),
 				from: `${short(ends.from.id)}.${ends.fromPort || 'out'}`,
 				to: `${short(ends.to.id)}.${ends.toPort || 'in'}`,
-				function: Object.keys(fn).length ? fn : undefined,
+				function: !plc && Object.keys(fn).length ? fn : undefined,
+				type_error: wireTypeError(editor, w) ? true : undefined,
 			})
 		}
 	}
@@ -143,22 +155,27 @@ export function describeCanvas(editor: Editor) {
 }
 
 /** The block library, for the system prompt. Stable, so it caches. */
-export function describeLibrary() {
-	return LIBRARY.filter((d) => !d.hidden)
+export function describeLibrary(plc = false) {
+	return LIBRARY.filter((d) => !d.hidden && !!d.plc === plc)
 		.map((d) =>
 			[
 				`### ${d.id} — ${d.title} (${d.category})`,
 				d.description,
-				`inputs: ${formatPorts(d.inputs) || 'none'}`,
-				`outputs: ${formatPorts(d.outputs) || 'none'}`,
+				plc ? `inputs: ${iecPorts(d.inputs) || 'none'}` : `inputs: ${formatPorts(d.inputs) || 'none'}`,
+				plc ? `outputs: ${iecPorts(d.outputs) || 'none'}` : `outputs: ${formatPorts(d.outputs) || 'none'}`,
 				d.settings?.length ? `settings (params): ${d.settings.map((x) => `${x.id}=${x.default}`).join(', ')}` : '',
-				'```python' + d.python.replace(/\n+$/, '') + '\n```',
+				// IEC blocks are standard: their names say what they do.
+				plc ? '' : '```python' + d.python.replace(/\n+$/, '') + '\n```',
 			]
 				.filter(Boolean)
 				.join('\n')
 		)
 		.join('\n\n')
 }
+
+/** "IN:BOOL, PT:TIME=5000" */
+const iecPorts = (ports: PortSpec[]) =>
+	ports.map((p) => `${p.id}:${p.iec ?? iecOfSignal(p.type)}${p.default ? `=${p.default}` : ''}`).join(', ')
 
 export function describePins() {
 	const rows = BOARD_PINS.filter((p) => p.gpio !== null).map((p) => {
@@ -270,6 +287,12 @@ export const TOOLS: Anthropic.Beta.BetaTool[] = [
 					anyOf: [{ type: 'integer' }, { type: 'string', enum: ['ask', 'auto'] }],
 				},
 				question: { type: 'string', description: 'With pin "ask": one short sentence shown above the board, e.g. "Which pin is the fan\'s MOSFET on?"' },
+				device: {
+					type: 'string',
+					enum: ['no', 'nc', 'toggle', 'signal'],
+					description:
+						'din only: what is on the pin. no: push button, TRUE while pressed (the BOOT button is one). nc: normally-closed push button, TRUE at rest and FALSE while pressed (stop buttons). toggle: a switch that stays on or off. signal (default): a sensor read as its pin level.',
+				},
 			},
 			required: ['kind', 'label', 'pin'],
 		},
@@ -437,7 +460,9 @@ export async function runTool(editor: Editor, name: string, input: unknown): Pro
 				const kind = str(a.kind, 'kind') as IoKind
 				if (!IO_KINDS.includes(kind)) throw new InputError(`kind must be one of ${IO_KINDS.join(', ')}`)
 				const label = str(a.label, 'label')!
-				const id = createIoBlock(editor, kind, spotFor(editor, isInput(kind) ? 'in' : 'out', { w: IO_W, h: IO_H }))
+				const device = (str(a.device, 'device', true) ?? 'signal') as InputDevice
+				if (!INPUT_DEVICES.includes(device)) throw new InputError(`device must be one of ${INPUT_DEVICES.join(', ')}`)
+				const id = createIoBlock(editor, kind, spotFor(editor, isInput(kind) ? 'in' : 'out', { w: IO_W, h: IO_H }), device)
 				editor.updateShape({ id, type: IO_TYPE, props: { label, pin: -1 } })
 				try {
 					const { pin, asked } = await choosePin(editor, id, kind, a.pin, str(a.question, 'question', true))
@@ -531,6 +556,10 @@ export async function runTool(editor: Editor, name: string, input: unknown): Pro
 				const inp = ins.find((p) => p.id === (toPort ?? ''))
 				if (!out) throw new InputError(`${short(from.id)} has no output "${fromPort ?? ''}"; outputs: ${outs.map((p) => p.id || '(the block)').join(', ') || 'none'}`)
 				if (!inp) throw new InputError(`${short(to.id)} has no input "${toPort ?? ''}"; inputs: ${ins.map((p) => p.id || '(the block)').join(', ') || 'none'}`)
+				if (isPlc(editor) && !iecCompatible(out.iec, inp.iec))
+					throw new InputError(
+						`type error: ${out.iec} can't drive ${inp.iec} in PLC mode; put a conversion in between (GT/LT for a threshold to BOOL, SEL from BOOL, plc.real_to_int, plc.real_to_time)`
+					)
 				const busy = getIncomingWire(editor, to.id, inp.id)
 				if (busy) throw new InputError(`that input is already driven by wire ${short(busy.id)}; delete it, or combine both with a logic.gate`)
 				const fn = wireFunction(obj(a.function, 'function'))

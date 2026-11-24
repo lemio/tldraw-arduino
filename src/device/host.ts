@@ -1,6 +1,7 @@
 import { Editor, TLShapePartial, atom, react, unsafe__withoutCapture } from 'tldraw'
 import { effectiveValue, writeInputs } from '../shapes/signals'
-import { IO_TYPE, IoShape, isInput } from '../shapes/types'
+import { IO_TYPE, IoShape, isContact, isInput } from '../shapes/types'
+import { contactValue } from '../shapes/inputControl'
 import { Device, DeviceState, ScanTelemetry, Telemetry } from './Device'
 
 /*
@@ -109,7 +110,7 @@ export function attachDevice(editor: Editor) {
 			const raw = d[String(s.props.pin)]
 			if (raw === undefined) continue
 			// Quantise analog to the ADC's 12 bits: collaborators get no sub-LSB noise.
-			const value = s.props.kind === 'din' ? (raw ? 1 : 0) : Math.round((raw / 65535) * 4095) / 4095
+			const value = s.props.kind === 'din' ? contactValue(s.props.device, !!raw) : Math.round((raw / 65535) * 4095) / 4095
 			if (value !== s.props.value || !s.props.live) {
 				updates.push({ id: s.id, value, live: true })
 			}
@@ -143,7 +144,9 @@ export function attachDevice(editor: Editor) {
 		const pins: Record<string, string> = {}
 		const outputs: [string, IoShape][] = []
 		for (const s of ioShapes(editor)) {
-			const { pin, kind, pull } = s.props
+			const { pin, kind, device } = s.props
+			// Buttons and switches are contacts to GND: they need the pull-up.
+			const pull = kind === 'din' && isContact(device) ? 'up' : s.props.pull
 			if (pin < 0 || pins[pin]) continue // first block wins a contested pin
 			pins[pin] = kind === 'din' && pull !== 'none' ? `${MODE[kind]}:${pull}` : MODE[kind]
 			if (!isInput(kind)) outputs.push([String(pin), s])

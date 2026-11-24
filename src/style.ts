@@ -61,6 +61,11 @@ export const detailZoom = (zoom: number) => Math.min(1, zoom / 0.75)
 
 /** Height of a block's header line, as the CSS draws it. */
 export const headHeight = () => (schematik() ? 16 * TEXT : 18)
+/**
+ * Symbol weight, as in Schematik's drawings: the wire weight up to 2 px, then
+ * growing half as fast, so symbols stay part of the lines.
+ */
+export const glyphW = () => (schematik() ? (LINE_W <= 2 ? Math.max(1.3, LINE_W) : 2 + (LINE_W - 2) / 2) : 1.6)
 /** Wire bends: square in Schematik's drawings, rounded in the classic look. */
 export const cornerRadius = () => (schematik() ? 0 : 10)
 

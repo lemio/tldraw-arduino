@@ -1,23 +1,42 @@
 import type { BlockDef, PortSpec } from './define'
 import type { LogicShape, SignalType } from '../shapes/types'
 
-/** Every file in library/ that default-exports a block. */
-const modules = import.meta.glob<{ default: BlockDef }>('./library/**/*.{ts,tsx}', { eager: true })
+/** Every file in library/ that default-exports a block, or exports a list of them as `blocks`. */
+const modules = import.meta.glob<{ default?: BlockDef; blocks?: BlockDef[] }>('./library/**/*.{ts,tsx}', { eager: true })
 
 export const LIBRARY: BlockDef[] = Object.values(modules)
-	.map((m) => m.default)
-	.filter(Boolean)
+	.flatMap((m) => [m.default, ...(m.blocks ?? [])])
+	.filter((d): d is BlockDef => !!d)
 
 const byId = new Map(LIBRARY.map((d) => [d.id, d]))
 
 /** Palette order; categories not listed here follow alphabetically. */
-const ORDER = ['Time', 'Variables', 'Logic', 'Colour', 'Display', 'Python']
+const ORDER = [
+	'Time',
+	'Variables',
+	'Logic',
+	'Colour',
+	'Display',
+	'Python',
+	// PLC mode
+	'Bit logic',
+	'Edges',
+	'Bistables',
+	'Timers',
+	'Counters',
+	'Compare',
+	'Arithmetic',
+	'Selection',
+	'Conversion',
+	'Control',
+]
 
-/** What the palette offers. */
+/** What the palette offers: the PLC library in PLC mode, the rest otherwise. */
 export const OFFERED = LIBRARY.filter((d) => !d.hidden)
+export const offered = (plc: boolean) => OFFERED.filter((d) => !!d.plc === plc)
 
-export function categories() {
-	const cats = [...new Set(OFFERED.map((d) => d.category))]
+export function categories(plc = false) {
+	const cats = [...new Set(offered(plc).map((d) => d.category))]
 	return cats.sort((a, b) => {
 		const ia = ORDER.indexOf(a)
 		const ib = ORDER.indexOf(b)

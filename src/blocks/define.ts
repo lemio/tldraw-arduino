@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { SignalType } from '../shapes/types'
+import type { IecType } from '../plc/iec'
 
 /*
  * A block is one MicroPython `update(b)` function plus a description of its
@@ -18,8 +19,10 @@ export interface PortSpec {
 	label?: string
 	/** Value of an unconnected input. People can change it on the block. */
 	default?: number
-	/** Shown after numbers, e.g. 's'. */
+	/** Shown after numbers, for example 's'. */
 	unit?: string
+	/** Its IEC 61131-3 type in PLC mode; by default digital is BOOL and analog/number REAL. */
+	iec?: IecType
 }
 
 /** A button on the block that pulses one of its digital inputs. */
@@ -50,14 +53,14 @@ export interface RenderContext {
 }
 
 export interface BlockDef {
-	/** Unique and stable, e.g. 'time.wait'. Saved in documents: never rename. */
+	/** Unique and stable, for example 'time.wait'. Saved in documents: never rename. */
 	id: string
 	/** Palette group: 'Time', 'Variables', 'Logic', 'Colour', or a new one. */
 	category: string
 	title: string
 	/** One sentence, shown when hovering the block in the palette. */
 	description: string
-	/** Prompt for naming it after the real thing, e.g. 'e.g. Wake-up alarm'. */
+	/** Prompt for naming it after the real thing, for example 'For example: Wake-up alarm'. */
 	example?: string
 	inputs: PortSpec[]
 	outputs: PortSpec[]
@@ -92,6 +95,21 @@ export interface BlockDef {
 	layout?: { ports(h: number): Record<string, number>; head(h: number): boolean }
 	/** Replace the standard body at any of the three sizes. */
 	render?: Partial<Record<Tier, (ctx: RenderContext) => ReactNode>>
+	/** Part of the PLC library (offered in PLC mode only): see src/blocks/library/plc. */
+	plc?: PlcSpec
+}
+
+/**
+ * How an IEC block appears in Structured Text, and what its full size shows.
+ * A function block (`fb`) keeps instance data from scan to scan and is called
+ * by its instance name: `Delay(IN := Door, PT := T#5s);`. A function is an
+ * expression, which `st` builds from its arguments by port id.
+ */
+export interface PlcSpec {
+	fb?: boolean
+	st?: (args: Record<string, string>) => string
+	/** 0..1 drawn as a bar under the value at full size: a timer's ET of PT, a counter's CV of PV. */
+	progress?: (ctx: { out: Record<string, number>; inputs: Record<string, number> }) => number
 }
 
 export const defineBlock = (def: BlockDef) => def

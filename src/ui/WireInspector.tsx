@@ -21,6 +21,8 @@ import { badgeSpot } from '../shapes/badges'
 import { inspectedWire } from '../shapes/wiring'
 import { CURVES, CurvePlot } from './CurvePlot'
 import { ColourStrip, Trace } from './Sparkline'
+import { IEC_HINT, IecType, fmtIec, iecCompatible, isPlc } from '../plc/iec'
+import { iecTypeOf } from '../shapes/signals'
 
 /**
  * The Logic Definer for one wire: follow or toggle, threshold, invert, map
@@ -49,8 +51,70 @@ export function WireInspector() {
 		if (id && (!state || !selected)) inspectedWire.set(null)
 	}, [id, state, selected])
 
+	const plc = useValue('plc', () => isPlc(editor), [editor])
 	if (!state) return null
-	return <Panel editor={editor} {...state} />
+	return plc ? <PlcPanel editor={editor} {...state} /> : <Panel editor={editor} {...state} />
+}
+
+/** What to put between two IEC types that don't join. */
+function conversionHint(src: IecType, dst: IecType) {
+	if (dst === 'BOOL') return `Compare it: GT, LT, EQ… turn a ${src} into TRUE or FALSE.`
+	if (src === 'BOOL') return 'Use SEL: G picks IN0 (FALSE) or IN1 (TRUE).'
+	if (dst === 'INT') return 'Use REAL_TO_INT.'
+	if (dst === 'TIME') return 'Use REAL_TO_TIME (milliseconds).'
+	return 'Put a conversion block in between.'
+}
+
+/**
+ * In PLC mode a wire has no function of its own: it carries a value of one
+ * type. This says which, what it carries now, and how to fix a type error.
+ */
+function PlcPanel({ editor, wire, from, fromPort, to, toPort, at }: PanelProps) {
+	const src = iecTypeOf(from, fromPort)
+	const dst = iecTypeOf(to, toPort)
+	const ok = iecCompatible(src, dst)
+	const value = useValue('value', () => outputValue(editor, from, fromPort), [editor, from, fromPort])
+	const W = 288
+	const viewport = editor.getViewportScreenBounds()
+	const left = Math.min(Math.max(8, at.x - W / 2), viewport.w - W - 8)
+	return (
+		<div className="insp insp-plc" style={{ left, top: Math.min(at.y + 20, viewport.h - 220), width: W }} onPointerDown={(e) => e.stopPropagation()}>
+			<header>
+				<span>
+					{blockName(from)}
+					{fromPort && `.${fromPort}`}
+					<span className="insp-arrow"> → </span>
+					{blockName(to)}
+					{toPort && `.${toPort}`}
+				</span>
+				<button className="insp-close" title="Close" onClick={() => inspectedWire.set(null)}>
+					×
+				</button>
+			</header>
+			<p>
+				<b>{src === dst ? src : `${src} → ${dst}`}</b>
+				{ok ? <> · now {fmtIec(src, value)}</> : <span className="insp-error"> · type error</span>}
+			</p>
+			<p className="insp-note">
+				{ok
+					? src === dst
+						? `${IEC_HINT[src]}. PLC wires carry values unchanged: thresholds, inverting and toggling are blocks here (GT, NOT, SR…).`
+						: `${src} widens to ${dst} without losing anything, as CODESYS allows.`
+					: `A ${src} output can't drive a ${dst} input, so the input reads its own constant instead. ${conversionHint(src, dst)}`}
+			</p>
+			{wire.props.via.length > 0 && (
+				<button
+					className="insp-straighten"
+					onClick={() => {
+						editor.markHistoryStoppingPoint('straighten')
+						editor.updateShape({ id: wire.id, type: WIRE_TYPE, props: { via: [] } })
+					}}
+				>
+					Straighten
+				</button>
+			)}
+		</div>
+	)
 }
 
 type PanelProps = {

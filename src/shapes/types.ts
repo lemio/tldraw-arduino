@@ -11,6 +11,23 @@ export type IoKind = 'din' | 'ain' | 'dout' | 'aout' | 'rgb'
 export type SignalType = 'digital' | 'analog' | 'number' | 'colour'
 export const IO_KINDS: IoKind[] = ['din', 'ain', 'dout', 'aout', 'rgb']
 export type Pull = 'none' | 'up' | 'down'
+/**
+ * What a digital input is. `signal` reads the pin as it is. The others are
+ * contacts between the pin and GND (internal pull-up), read as the contact:
+ * TRUE while it is closed. A NO button closes while pressed; an NC button
+ * is closed at rest and opens while pressed (TRUE at rest, as a stop button
+ * should be); a toggle switch stays where it was put.
+ */
+export type InputDevice = 'signal' | 'no' | 'nc' | 'toggle'
+export const INPUT_DEVICES: InputDevice[] = ['signal', 'no', 'nc', 'toggle']
+export const DEVICE_INFO: Record<InputDevice, { title: string; short: string; example: string; hint: string }> = {
+	signal: { title: 'Digital input', short: 'sensor signal', example: 'What is it? For example: Motion sensor', hint: 'Reads the pin as it is: HIGH or LOW' },
+	no: { title: 'Push button, normally open', short: 'normally open', example: 'What is it? For example: Start button', hint: 'Normally open: TRUE while pressed. Wire it between the pin and ground (⏚)' },
+	nc: { title: 'Push button, normally closed', short: 'normally closed', example: 'What is it? For example: Stop button', hint: 'Normally closed: TRUE at rest, FALSE while pressed (a broken wire reads as pressed). Wire it between the pin and ground (⏚)' },
+	toggle: { title: 'Toggle switch', short: 'toggle switch', example: 'What is it? For example: Light switch', hint: 'Stays on or off: TRUE while switched on. Wire it between the pin and ground (⏚)' },
+}
+/** A contact device reads closed (TRUE) when its pin is pulled LOW. */
+export const isContact = (d: InputDevice | undefined) => !!d && d !== 'signal'
 export type AnalogUnit = 'raw' | 'volt' | 'pct'
 
 export const IO_TYPE = 'io'
@@ -36,6 +53,8 @@ export interface IoShapeProps {
 	value: number
 	/** Inputs only: true while a connected board is writing `value`. */
 	live: boolean
+	/** Digital inputs: what is on the pin (see InputDevice). */
+	device: InputDevice
 }
 
 export type WireFn = 'follow' | 'toggle'
@@ -159,7 +178,7 @@ export interface WireBindingProps {
 
 /** A block whose behaviour is MicroPython (see src/blocks). */
 export interface LogicShapeProps {
-	/** Library block id, e.g. 'time.wait', or 'custom' for a Python block. */
+	/** Library block id, for example 'time.wait', or 'custom' for a Python block. */
 	def: string
 	w: number
 	h: number
@@ -203,11 +222,11 @@ export const signalType = (kind: IoKind): SignalType =>
 
 /** `example` prompts for a real name: what is it, in the actual project? */
 export const KIND_INFO: Record<IoKind, { title: string; example: string; hint: string }> = {
-	din: { title: 'Digital in', example: 'What is it? e.g. Door switch', hint: 'Reads HIGH or LOW from a pin' },
-	ain: { title: 'Analog in', example: 'What is it? e.g. Plant soil moisture', hint: 'Reads a voltage, 0–3.1 V' },
-	dout: { title: 'Digital out', example: 'What is it? e.g. Red warning light', hint: 'Switches a pin HIGH or LOW' },
-	aout: { title: 'Analog out', example: 'What is it? e.g. Desk fan speed', hint: 'PWM duty cycle, 0–100 %' },
-	rgb: { title: 'RGB LED', example: 'What is it? e.g. Mood light', hint: 'A WS2812 colour LED (the DevKit has one on GPIO 38)' },
+	din: { title: 'Digital input', example: 'What is it? For example: Door switch', hint: 'Reads HIGH or LOW from a pin' },
+	ain: { title: 'Analog input', example: 'What is it? For example: Plant soil moisture', hint: 'Reads a voltage, 0–3.1 V' },
+	dout: { title: 'Digital output', example: 'What is it? For example: Red warning light', hint: 'Switches a pin HIGH or LOW' },
+	aout: { title: 'Analog output', example: 'What is it? For example: Desk fan speed', hint: 'Pulse-width modulation: on for 0–100 % of the time' },
+	rgb: { title: 'Colour LED', example: 'What is it? For example: Mood light', hint: 'A WS2812 colour LED (the DevKit has one on GPIO 38)' },
 }
 
 /** Pins a block of this kind may use: every header GPIO the board map allows. */

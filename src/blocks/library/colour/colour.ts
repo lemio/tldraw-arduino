@@ -5,8 +5,8 @@ export default defineBlock({
 	id: 'colour.colour',
 	category: 'Colour',
 	title: 'Colour',
-	description: 'A colour you pick, dimmed by brightness, for an RGB LED',
-	example: 'e.g. Bedtime glow',
+	description: 'A colour you pick, dimmed by brightness, for a colour LED',
+	example: 'For example: Bedtime glow',
 	inputs: [
 		{ id: 'colour', type: 'colour', default: 0xff6a00 },
 		{ id: 'brightness', type: 'analog', default: 1 },

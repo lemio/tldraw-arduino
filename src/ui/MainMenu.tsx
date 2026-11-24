@@ -26,6 +26,21 @@ import {
 } from 'tldraw'
 import { isFanOutOn, setFanOut } from '../settings'
 import { look, setLook } from '../style'
+import { stickyInputs } from './StickyInputs'
+
+/** Just for you: inputs that scroll away stay at the left edge, outputs at the right, to work and watch them while testing. */
+function ToggleStickyItem() {
+	const on = useValue(stickyInputs)
+	return (
+		<TldrawUiMenuCheckboxItem
+			id="sticky-inputs"
+			label="Keep inputs and outputs at the edges"
+			checked={on}
+			readonlyOk
+			onSelect={() => void stickyInputs.set(!on)}
+		/>
+	)
+}
 
 /** tldraw's main menu, with one extra preference next to its own. */
 export function MainMenu() {
@@ -52,6 +67,7 @@ export function MainMenu() {
 					</TldrawUiMenuGroup>
 					<TldrawUiMenuGroup id="wires">
 						<ToggleFanOutItem />
+						<ToggleStickyItem />
 						<ToggleClassicItem />
 					</TldrawUiMenuGroup>
 					<TldrawUiMenuGroup id="user-interface-submenus">

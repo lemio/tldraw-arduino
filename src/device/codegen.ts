@@ -1,17 +1,21 @@
 import { Editor } from 'tldraw'
 import { getDef } from '../blocks/registry'
 import { PY_RUNTIME } from '../blocks/runtime'
+import { executionOrder } from '../blocks/order'
+import { CYCLE_MS, iecCompatible, isPlc } from '../plc/iec'
 import {
 	Block,
 	blockName,
 	getIncomingWire,
 	getWireEnds,
+	iecTypeOf,
 	isMap,
 	isPlainWire,
 	portTypeOf,
 } from '../shapes/signals'
 import {
 	IO_TYPE,
+	DEVICE_INFO,
 	IoShape,
 	KIND_INFO,
 	LOGIC_TYPE,
@@ -19,6 +23,7 @@ import {
 	SignalType,
 	WIRE_TYPE,
 	WireShape,
+	isContact,
 	isInput,
 	signalType,
 } from '../shapes/types'
@@ -29,6 +34,13 @@ import {
  * per wire, with a comment wherever a type cast happens.
  */
 export function generateMain(editor: Editor): string {
+	// A PLC program always has the shape of a scan cycle.
+	if (isPlc(editor)) {
+		const any = editor
+			.getCurrentPageShapes()
+			.some((s) => s.type === LOGIC_TYPE || (s.type === IO_TYPE && (s as IoShape).props.pin >= 0))
+		return any ? generateGraph(editor, true) : '# Add blocks to the canvas and give them a pin.\n# Their program appears here.\n'
+	}
 	const shapes = editor.getCurrentPageShapes()
 	const logic = shapes.filter((s): s is LogicShape => s.type === LOGIC_TYPE)
 	const hasRgb = shapes.some((s) => s.type === IO_TYPE && (s as IoShape).props.kind === 'rgb')
@@ -47,7 +59,7 @@ export function generateMain(editor: Editor): string {
 	const names = new Map<string, string>()
 	const taken = new Set<string>(RESERVED)
 	for (const b of blocks) {
-		let base = identifier(b.props.label || KIND_INFO[b.props.kind].title)
+		let base = identifier(b.props.label || kindTitle(b))
 		if (!base || /^\d/.test(base)) base = `${b.props.kind}_${b.props.pin}`
 		let name = base
 		for (let i = 2; taken.has(name); i++) name = `${base}_${i}`
@@ -63,10 +75,10 @@ export function generateMain(editor: Editor): string {
 	for (const b of blocks) {
 		const n = names.get(b.id)!
 		const g = b.props.pin
-		const note = `  # ${KIND_INFO[b.props.kind].title.toLowerCase()}`
+		const note = `  # ${kindTitle(b).toLowerCase()}`
 		switch (b.props.kind) {
 			case 'din': {
-				const pull = b.props.pull === 'up' ? ', Pin.PULL_UP' : b.props.pull === 'down' ? ', Pin.PULL_DOWN' : ''
+				const pull = pullArg(b)
 				setup.push(`${n} = Pin(${g}, Pin.IN${pull})${note}`)
 				break
 			}
@@ -103,7 +115,7 @@ export function generateMain(editor: Editor): string {
 		const p = wire.props
 		const srcType = signalType(from.props.kind)
 		const dstType = signalType(b.props.kind)
-		const read = srcType === 'digital' ? `${src}.value()` : `${src}.read_u16()`
+		const read = srcType === 'digital' ? digitalRead(from, src) : `${src}.read_u16()`
 		const u16 = (v: number) => Math.round(v * 65535)
 
 		if (isMap(p, srcType, dstType)) {
@@ -157,6 +169,17 @@ export function generateMain(editor: Editor): string {
 
 const pct = (v: number) => Math.round(v * 100)
 
+/** What an IO block is: a push button or toggle switch, else its kind. */
+const kindTitle = (b: IoShape) => (b.props.kind === 'din' ? DEVICE_INFO[b.props.device].title : KIND_INFO[b.props.kind].title)
+
+/** Buttons and switches are contacts to GND on the pull-up: closed reads LOW, so TRUE is 1 - value(). */
+const digitalRead = (b: IoShape, n: string) => (isContact(b.props.device) ? `(1 - ${n}.value())` : `${n}.value()`)
+
+function pullArg(b: IoShape) {
+	if (isContact(b.props.device) || b.props.pull === 'up') return ', Pin.PULL_UP'
+	return b.props.pull === 'down' ? ', Pin.PULL_DOWN' : ''
+}
+
 const REMAP = `def remap(v, in_lo, in_hi, out_lo, out_hi):
     t = min(1, max(0, (v - in_lo) / (in_hi - in_lo)))
     return int(out_lo + t * (out_hi - out_lo))`
@@ -189,13 +212,13 @@ function alignComments(lines: string[]) {
  * inputs, run each block's update(b) in dependency order, drive the outputs.
  * Every block's Python is the same code the canvas runs.
  */
-function generateGraph(editor: Editor): string {
+function generateGraph(editor: Editor, plc = false): string {
 	const all = editor
 		.getCurrentPageShapes()
 		.filter((s): s is Block => (s.type === IO_TYPE && (s as IoShape).props.pin >= 0) || s.type === LOGIC_TYPE)
 		.sort((a, b) => a.y - b.y || a.x - b.x)
 	const io = all.filter((s): s is IoShape => s.type === IO_TYPE)
-	const logic = order(editor, all.filter((s): s is LogicShape => s.type === LOGIC_TYPE))
+	const logic = executionOrder(editor, all.filter((s): s is LogicShape => s.type === LOGIC_TYPE))
 
 	const names = new Map<string, string>()
 	const taken = new Set<string>(RESERVED)
@@ -212,9 +235,9 @@ function generateGraph(editor: Editor): string {
 	for (const b of io) {
 		const n = names.get(b.id)!
 		const g = b.props.pin
-		const note = `  # ${KIND_INFO[b.props.kind].title.toLowerCase()}`
+		const note = `  # ${kindTitle(b).toLowerCase()}`
 		if (b.props.kind === 'din') {
-			const pull = b.props.pull === 'up' ? ', Pin.PULL_UP' : b.props.pull === 'down' ? ', Pin.PULL_DOWN' : ''
+			const pull = pullArg(b)
 			setup.push(`${n} = Pin(${g}, Pin.IN${pull})${note}`)
 		} else if (b.props.kind === 'ain') setup.push(`${n} = ADC(Pin(${g}), atten=ADC.ATTN_11DB)${note}`)
 		else if (b.props.kind === 'dout') setup.push(`${n} = Pin(${g}, Pin.OUT)${note}`)
@@ -240,7 +263,8 @@ function generateGraph(editor: Editor): string {
 	for (const b of logic) {
 		const n = names.get(b.id)!
 		instances.push(`${n} = ${factoryOf(b)}()  # ${getDef(b).title.toLowerCase()}`)
-		if (Object.keys(b.props.state).length) instances.push(`${n}.state = ${pyLiteral(b.props.state)}`)
+		// A PLC download is a cold start: instance data (timers, counters) begins fresh.
+		if (!plc && Object.keys(b.props.state).length) instances.push(`${n}.state = ${pyLiteral(b.props.state)}`)
 	}
 
 	const once: string[] = []
@@ -252,7 +276,9 @@ function generateGraph(editor: Editor): string {
 		const n = names.get(b.id)
 		if (!n) return '0'
 		if (b.type === LOGIC_TYPE) return `${n}.out.get(${JSON.stringify(port)}, 0)`
-		return b.props.kind === 'din' ? `${n}.value()` : `${n}.read_u16() / 65535`
+		// A PLC reads every input once, at the start of the scan: the input image.
+		if (plc) return `i_${n}`
+		return b.props.kind === 'din' ? digitalRead(b, n) : `${n}.read_u16() / 65535`
 	}
 
 	/** The Python for what arrives at an input port, with its wire's function. */
@@ -260,6 +286,8 @@ function generateGraph(editor: Editor): string {
 		const wire = getIncomingWire(editor, b.id, port)
 		const ends = wire && getWireEnds(editor, wire)
 		if (!wire || !ends?.from || !names.has(ends.from.id)) return fallback
+		// PLC wires are typed and plain: the value as it is, or the block's own constant on a type error.
+		if (plc) return iecCompatible(iecTypeOf(ends.from, ends.fromPort), iecTypeOf(b, port)) ? portExpr(ends.from, ends.fromPort) : fallback
 		const src = portTypeOf(ends.from, ends.fromPort)
 		const dst = portTypeOf(b, port)
 		return wireExpr(wire, src, dst, portExpr(ends.from, ends.fromPort))
@@ -300,6 +328,18 @@ function generateGraph(editor: Editor): string {
 		loop.push(`${n}.step()`)
 	}
 
+	const image: string[] = []
+	if (plc) {
+		for (const b of io) {
+			if (!isInput(b.props.kind)) continue
+			const n = names.get(b.id)!
+			image.push(`i_${n} = ${b.props.kind === 'din' ? digitalRead(b, n) : `${n}.read_u16() / 65535`}`)
+		}
+		if (image.length) image.unshift('# 1. read the inputs (%I) into the input image')
+		if (loop.length) loop.unshift('# 2. run every block once, in execution order')
+	}
+	if (plc && io.some((b) => !isInput(b.props.kind))) loop.push('# 3. write the outputs (%Q)')
+
 	for (const b of io) {
 		if (isInput(b.props.kind)) continue
 		const n = names.get(b.id)!
@@ -324,6 +364,15 @@ function generateGraph(editor: Editor): string {
 	for (const [code, f] of factories) out.push('', ...factory(f, code))
 	if (instances.length) out.push('', ...instances)
 	if (once.length) out.push('', ...once)
+	if (plc) {
+		// The scan cycle: input image, program, output image, then wait out the rest of the cycle.
+		out.splice(0, 2, '# Generated from the canvas in PLC mode. Saved as main.py,', `# it runs on the board as a PLC: one scan every ${CYCLE_MS} ms.`)
+		out.push('', `CYCLE_MS = ${CYCLE_MS}`, '', 'while True:', '    t0 = time.ticks_ms()')
+		const scan = [...image, ...loop]
+		out.push(...(scan.length ? scan.map((l) => '    ' + l) : ['    pass']))
+		out.push('    time.sleep_ms(max(0, CYCLE_MS - time.ticks_diff(time.ticks_ms(), t0)))', '')
+		return out.join('\n')
+	}
 	out.push('', 'while True:')
 	out.push(...(loop.length ? loop.map((l) => '    ' + l) : ['    pass']))
 	out.push('    time.sleep_ms(10)', '')
@@ -382,26 +431,6 @@ def show(led, c):
         _shown[id(led)] = c
         led[0] = ((c >> 16) & 255, (c >> 8) & 255, c & 255)
         led.write()`
-
-/** Logic blocks feeding other logic blocks run first, so each loop is up to date. */
-function order(editor: Editor, blocks: LogicShape[]) {
-	const ids = new Set(blocks.map((b) => b.id))
-	const done = new Set<string>()
-	const out: LogicShape[] = []
-	const visit = (b: LogicShape, path: Set<string>) => {
-		if (done.has(b.id) || path.has(b.id)) return
-		path.add(b.id)
-		for (const inp of getDef(b).inputs) {
-			const wire = getIncomingWire(editor, b.id, inp.id)
-			const from = wire && getWireEnds(editor, wire).from
-			if (from && ids.has(from.id)) visit(from as LogicShape, path)
-		}
-		done.add(b.id)
-		out.push(b)
-	}
-	for (const b of blocks) visit(b, new Set())
-	return out
-}
 
 /** JSON-ish state as a Python literal. */
 function pyLiteral(v: unknown): string {

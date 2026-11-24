@@ -1,10 +1,12 @@
 import wasmUrl from '@micropython/micropython-webassembly-pyscript/micropython.wasm?url'
 import { Editor, TLShapeId, TLShapePartial, atom } from 'tldraw'
 import { deviceStatus } from '../device/host'
-import { Fresh, freshKey, getIncomingWire, getWireEnds, inputValue, writeSignals } from '../shapes/signals'
+import { Fresh, freshKey, inputValue, writeSignals } from '../shapes/signals'
 import { IO_TYPE, IoShape, LOGIC_TYPE, LogicShape } from '../shapes/types'
 import { getDef } from './registry'
 import { PY_RUNTIME } from './runtime'
+import { executionOrder } from './order'
+import { CYCLE_MS, isPlcStopped } from '../plc/iec'
 
 /*
  * Runs every logic block's MicroPython while you work: MicroPython itself,
@@ -16,7 +18,8 @@ import { PY_RUNTIME } from './runtime'
  * board is plugged into, or else the present person with the lowest user id.
  */
 
-export const TICK_HZ = 20
+/** Every block runs once per tick: in PLC mode, the scan cycle. */
+export const TICK_HZ = 1000 / CYCLE_MS
 
 /** Whether this browser is the one running the blocks (for the status line). */
 export const isRunning = atom('isRunning', false)
@@ -71,27 +74,6 @@ function elected(editor: Editor) {
 	return editor.getCollaborators().every((c) => plain(c.userId) >= me)
 }
 
-/** Blocks feeding other blocks run first, so one tick carries a change all the way through. */
-function order(editor: Editor, blocks: LogicShape[]) {
-	const byId = new Map(blocks.map((b) => [b.id, b]))
-	const done = new Set<TLShapeId>()
-	const out: LogicShape[] = []
-	const visit = (b: LogicShape, path: Set<TLShapeId>) => {
-		if (done.has(b.id) || path.has(b.id)) return // a loop runs one tick behind
-		path.add(b.id)
-		for (const p of getDef(b).inputs) {
-			const wire = getIncomingWire(editor, b.id, p.id)
-			const from = wire && getWireEnds(editor, wire).from
-			const up = from && byId.get(from.id)
-			if (up) visit(up, path)
-		}
-		done.add(b.id)
-		out.push(b)
-	}
-	for (const b of blocks) visit(b, new Set())
-	return out
-}
-
 export function startRunner(editor: Editor, log: (line: string) => void = console.log) {
 	/** Which code each live instance was made from, so edits rebuild it. */
 	const made = new Map<TLShapeId, string>()
@@ -106,6 +88,8 @@ export function startRunner(editor: Editor, log: (line: string) => void = consol
 			made.clear()
 			return
 		}
+		// A PLC in STOP doesn't scan; its function blocks keep their instance data.
+		if (isPlcStopped(editor)) return
 		busy = true
 		try {
 			const python = await loadPython((s) => log(s))
@@ -121,7 +105,7 @@ export function startRunner(editor: Editor, log: (line: string) => void = consol
 			const signals: { id: TLShapeId; port: string; value: number }[] = []
 			const extra: TLShapePartial[] = []
 
-			for (const block of order(editor, blocks)) {
+			for (const block of executionOrder(editor, blocks)) {
 				const live = editor.getShape(block.id) as LogicShape | undefined
 				if (!live) continue
 				const def = getDef(live)

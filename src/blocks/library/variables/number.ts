@@ -5,7 +5,7 @@ export default defineBlock({
 	category: 'Variables',
 	title: 'Number',
 	description: 'A fixed number you type in, to feed other blocks',
-	example: 'e.g. Snooze minutes',
+	example: 'For example: Snooze minutes',
 	inputs: [{ id: 'value', type: 'number', default: 10 }],
 	outputs: [{ id: 'out', type: 'number' }],
 	display: 'out',

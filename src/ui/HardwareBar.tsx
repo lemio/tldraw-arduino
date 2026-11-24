@@ -6,6 +6,7 @@ import { device, deviceStatus, telemetryRate } from '../device/host'
 import { playback } from '../shapes/playback'
 import { MAX_SECONDS, recording, startRecording, stopRecording } from '../shapes/recorder'
 import { chatOpen } from '../ai/agent'
+import { CYCLE_MS, isPlc, isPlcStopped, setPlc, setPlcRunning } from '../plc/iec'
 
 export const codePanelOpen = atom('codePanelOpen', false)
 
@@ -21,6 +22,7 @@ export function HardwareBar() {
 		<div className="hwbar" onPointerDown={(e) => e.stopPropagation()}>
 			<BoardChip />
 			<span className="hwbar-sep" />
+			<PlcControls />
 			<RecordButton />
 			<button
 				className={`hwbar-add${codeOpen ? ' is-on' : ''}`}
@@ -37,6 +39,47 @@ export function HardwareBar() {
 				Assistant
 			</button>
 		</div>
+	)
+}
+
+/**
+ * PLC mode, for the whole room: the IEC block library, typed wires and a scan
+ * cycle. While on, RUN / STOP works like the switch on a PLC: STOP halts the
+ * program and switches every output off.
+ */
+function PlcControls() {
+	const editor = useEditor()
+	const plc = useValue('plc', () => isPlc(editor), [editor])
+	const stopped = useValue('stopped', () => isPlcStopped(editor), [editor])
+	return (
+		<>
+			<button
+				className={`hwbar-add${plc ? ' is-on' : ''}`}
+				title={
+					plc
+						? 'Leave programmable logic controller (PLC) mode: back to the maker blocks and wire functions'
+						: 'Programmable logic controller (PLC) mode: the standard IEC 61131-3 blocks (timers, counters, latches…), typed wires and a scan cycle, as on an industrial controller'
+				}
+				onClick={() => setPlc(editor, !plc)}
+			>
+				PLC
+			</button>
+			{plc && (
+				<button
+					className={`hwbar-add plc-mode ${stopped ? 'is-stop' : 'is-run'}`}
+					title={
+						stopped
+							? '■ Stopped: the program is halted and every output is off. Click to run.'
+							: `▶ Running: one scan every ${CYCLE_MS} milliseconds — read the inputs, run every block in order, write the outputs. Click to stop.`
+					}
+					onClick={() => setPlcRunning(editor, stopped)}
+				>
+					<i className="plc-led" />
+					{stopped ? '■ Stopped' : '▶ Running'}
+				</button>
+			)}
+			<span className="hwbar-sep" />
+		</>
 	)
 }
 

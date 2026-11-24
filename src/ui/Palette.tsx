@@ -1,15 +1,23 @@
 import { useState } from 'react'
-import { Editor, TLShapeId, VecLike, useEditor } from 'tldraw'
-import { CUSTOM_ID, OFFERED, categories, defaultCustomDef } from '../blocks/registry'
+import { Editor, TLShapeId, VecLike, useEditor, useValue } from 'tldraw'
+import { CUSTOM_ID, categories, defaultCustomDef, offered } from '../blocks/registry'
+import { iecOfIo, isPlc } from '../plc/iec'
 import { logicSize } from '../blocks/layout'
 import { IO_H, IO_W, createCameraBlock, createIoBlock, createLogicBlock, nextDropPoint } from '../shapes/blocks'
-import { IoKind, KIND_INFO, SignalType, signalType } from '../shapes/types'
+import { DEVICE_INFO, InputDevice, IoKind, KIND_INFO, SignalType, signalType } from '../shapes/types'
+import { plcName, plcSymbol } from '../plc/names'
+import { DeviceIcon } from './ContactSymbol'
+import { stickyInputs } from './StickyInputs'
 import { editingCustom } from '../blocks/CustomEditor'
 
 interface Item {
 	key: string
 	title: string
+	/** The IEC code or operator symbol, beside the full name. */
+	tag?: string
 	hint: string
+	/** A symbol in place of the glyph: an input's contact. */
+	icon?: React.ReactNode
 	/** Glyph: the type of value the block produces (or takes, for outputs). */
 	glyph: SignalType | 'camera' | 'python'
 	make(editor: Editor, at: VecLike): TLShapeId
@@ -20,32 +28,51 @@ interface Item {
 	after?(id: TLShapeId): void
 }
 
-const io = (kind: IoKind): Item => ({
-	key: kind,
-	title: KIND_INFO[kind].title,
-	hint: KIND_INFO[kind].hint,
+const PLC_HINT: Record<IoKind, string> = {
+	din: 'A BOOL input at %IX: a button, switch or sensor contact',
+	ain: 'A REAL input at %IW, 0.0–1.0: a knob or sensor',
+	dout: 'A BOOL output at %QX: a lamp, relay or buzzer',
+	aout: 'A REAL output at %QW, 0.0–1.0: pulse-width modulation for a dimmer or motor speed',
+	rgb: 'A DWORD output: a WS2812 colour LED (the DevKit has one on GPIO 38)',
+}
+
+const io = (kind: IoKind, plc = false, device?: InputDevice): Item => ({
+	key: device ? `${kind}-${device}` : kind,
+	title:
+		device && device !== 'signal' ? DEVICE_INFO[device].title : plc ? `${KIND_INFO[kind].title} · ${iecOfIo(kind)}` : KIND_INFO[kind].title,
+	hint: device && device !== 'signal' ? DEVICE_INFO[device].hint : plc ? PLC_HINT[kind] : KIND_INFO[kind].hint,
 	glyph: signalType(kind),
-	make: (editor, at) => createIoBlock(editor, kind, at),
+	icon: device && device !== 'signal' ? <DeviceIcon device={device} size={0.6} weight={1.1} /> : undefined,
+	make: (editor, at) => createIoBlock(editor, kind, at, device),
 	size: { w: IO_W, h: IO_H },
 	name: true,
 })
 
-function groups(): { title: string; items: Item[] }[] {
+function groups(plc: boolean): { title: string; items: Item[]; pinnable?: boolean }[] {
 	return [
-		{ title: 'Inputs', items: [io('din'), io('ain')] },
-		{ title: 'Outputs', items: [io('dout'), io('aout'), io('rgb')] },
-		...categories().map((title) => ({
+		{
+			title: plc ? 'Inputs (%I)' : 'Inputs',
+			pinnable: true,
+			items: [io('din', plc, 'no'), io('din', plc, 'nc'), io('din', plc, 'toggle'), io('din', plc, 'signal'), io('ain', plc)],
+		},
+		{
+			title: plc ? 'Outputs (%Q)' : 'Outputs',
+			pinnable: true,
+			items: [io('dout', plc), io('aout', plc), io('rgb', plc)],
+		},
+		...categories(plc).map((title) => ({
 			title,
-			items: OFFERED.filter((d) => d.category === title).map(
-				(d): Item => ({
+			items: offered(plc)
+				.filter((d) => d.category === title)
+				.map((d): Item => ({
 					key: d.id,
-					title: d.title,
-					hint: d.description,
+					title: plcName(d),
+					tag: d.plc ? (plcSymbol(d) ?? d.title) : undefined,
+					hint: d.plc ? `${plcName(d)} (${d.title}): ${d.description}` : d.description,
 					glyph: (d.outputs.find((o) => o.id === d.display) ?? d.outputs[0])?.type ?? 'number',
 					make: (editor, at) => createLogicBlock(editor, d.id, at),
 					size: logicSize(d),
-				})
-			),
+				})),
 		})),
 		{
 			title: 'Python',
@@ -83,7 +110,12 @@ function groups(): { title: string; items: Item[] }[] {
  */
 export function Palette() {
 	const editor = useEditor()
-	const [ghost, setGhost] = useState<{ item: Item; x: number; y: number } | null>(null)
+	const plc = useValue('plc', () => isPlc(editor), [editor])
+	const [ghost, setGhost] = useState<{
+		item: Item
+		x: number
+		y: number
+	} | null>(null)
 
 	const add = (item: Item, at: VecLike) => {
 		editor.markHistoryStoppingPoint('add block')
@@ -117,14 +149,18 @@ export function Palette() {
 
 	return (
 		<>
-			<nav className="palette" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
-				{groups().map((g) => (
+			<nav className={`palette${plc ? ' is-plc' : ''}`} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+				{groups(plc).map((g) => (
 					<section key={g.title}>
-						<h3>{g.title}</h3>
+						<h3>
+							{g.title}
+							{g.pinnable && <StickyToggle />}
+						</h3>
 						{g.items.map((item) => (
 							<button key={item.key} title={item.hint} onPointerDown={(e) => startDrag(item, e)}>
-								<i className={`glyph glyph-${item.glyph}`} />
-								{item.title}
+								{item.icon ?? <i className={`glyph glyph-${item.glyph}`} />}
+								<span className="palette-title">{item.title}</span>
+								{item.tag && <small className="palette-tag">{item.tag}</small>}
 							</button>
 						))}
 					</section>
@@ -137,5 +173,26 @@ export function Palette() {
 				</div>
 			)}
 		</>
+	)
+}
+
+/** Keep every input within reach at the left edge, and every output in view at the right, wherever the canvas scrolls. */
+function StickyToggle() {
+	const on = useValue(stickyInputs)
+	return (
+		<button
+			className={`palette-pin${on ? ' is-on' : ''}`}
+			title={
+				on
+					? 'Inputs stick to the left edge and outputs to the right when scrolled away. Click to stop.'
+					: 'Keep inputs at the left edge and outputs at the right edge when they scroll out of view, to work and watch them while testing'
+			}
+			onPointerDown={(e) => e.stopPropagation()}
+			onClick={() => stickyInputs.set(!on)}
+		>
+			<svg viewBox="0 0 16 16" width={12} height={12} aria-hidden>
+				<path d="M6 2 h4 M8 2 v5 M4.5 7 h7 l-1.5 3 h-4 z M8 10 v4" />
+			</svg>
+		</button>
 	)
 }

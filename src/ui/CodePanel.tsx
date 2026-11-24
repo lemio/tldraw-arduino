@@ -3,13 +3,19 @@ import { Editor, useValue } from 'tldraw'
 import { generateMain } from '../device/codegen'
 import { consoleLines, device, deviceStatus } from '../device/host'
 import { codePanelOpen } from './HardwareBar'
+import { isPlc } from '../plc/iec'
+import { generateST } from '../plc/st'
 
 /**
  * The canvas, as the MicroPython it stands for — always in sync, because it is
  * derived from the same store — plus a console to talk to the board directly.
  */
 export function CodePanel({ editor }: { editor: Editor }) {
-	const code = useValue('code', () => generateMain(editor), [editor])
+	const plc = useValue('plc', () => isPlc(editor), [editor])
+	// In PLC mode the program also reads as Structured Text; the board still runs main.py.
+	const [tab, setTab] = useState<'st' | 'py'>('st')
+	const showST = plc && tab === 'st'
+	const code = useValue('code', () => (showST ? generateST(editor) : generateMain(editor)), [editor, showST])
 	const { state } = useValue(deviceStatus)
 	const [copied, setCopied] = useState(false)
 	const [busy, setBusy] = useState(false)
@@ -18,7 +24,18 @@ export function CodePanel({ editor }: { editor: Editor }) {
 	return (
 		<aside className="code">
 			<header>
-				<h2>main.py</h2>
+				{plc ? (
+					<h2 className="code-tabs">
+						<button className={showST ? 'is-on' : ''} onClick={() => setTab('st')} title="IEC 61131-3 Structured Text: paste into CODESYS or OpenPLC">
+							PLC_PRG.st
+						</button>
+						<button className={showST ? '' : 'is-on'} onClick={() => setTab('py')} title="What the board runs">
+							main.py
+						</button>
+					</h2>
+				) : (
+					<h2>main.py</h2>
+				)}
 				<button
 					onClick={async () => {
 						await navigator.clipboard.writeText(code)
@@ -32,13 +49,13 @@ export function CodePanel({ editor }: { editor: Editor }) {
 					disabled={!canSave || busy}
 					title={
 						canSave
-							? 'Write this program to the board. It then runs without the browser, also after a power cycle.'
+							? 'Write this program to the board as main.py. It then runs without the browser, also after a power cycle.'
 							: 'Connect a board first'
 					}
 					onClick={async () => {
 						setBusy(true)
 						try {
-							await device.saveMain(code)
+							await device.saveMain(generateMain(editor))
 						} finally {
 							setBusy(false)
 						}
@@ -51,9 +68,7 @@ export function CodePanel({ editor }: { editor: Editor }) {
 				</button>
 			</header>
 			<pre className="code-src">
-				{code.split('\n').map((line, i) => (
-					<Line key={i} text={line} />
-				))}
+				{code.split('\n').map((line, i) => (showST ? <StLine key={i} text={line} /> : <Line key={i} text={line} />))}
 			</pre>
 			<Console />
 		</aside>
@@ -70,6 +85,12 @@ function Line({ text }: { text: string }) {
 			<span className="c">{text.slice(i)}</span>
 		</div>
 	)
+}
+
+/** Structured Text: comments are (* … *). */
+function StLine({ text }: { text: string }) {
+	const parts = text.split(/(\(\*.*?\*\))/)
+	return <div>{text ? parts.map((p, i) => (p.startsWith('(*') ? <span key={i} className="c">{p}</span> : p)) : ' '}</div>
 }
 
 function Console() {
@@ -115,7 +136,7 @@ function Console() {
 					value={input}
 					disabled={!ready}
 					spellCheck={false}
-					placeholder={ready ? 'Python, e.g. 1 + 1' : 'Connect a board to use the REPL'}
+					placeholder={ready ? 'Python, for example 1 + 1' : 'Connect a board to use the REPL'}
 					onChange={(e) => setInput(e.target.value)}
 					onKeyDown={(e) => {
 						if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return

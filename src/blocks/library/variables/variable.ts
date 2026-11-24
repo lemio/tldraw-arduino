@@ -6,7 +6,7 @@ export default defineBlock({
 	category: 'Variables',
 	title: 'Variable',
 	description: 'A number you can count up and down, and use anywhere',
-	example: 'e.g. Visitors today',
+	example: 'For example: Visitors today',
 	inputs: [
 		{ id: 'add', type: 'digital', label: '+1' },
 		{ id: 'subtract', type: 'digital', label: '−1' },

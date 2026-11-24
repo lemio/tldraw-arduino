@@ -23,8 +23,10 @@ import { SharePanel } from './ui/SharePanel'
 import { WireInspector } from './ui/WireInspector'
 import { HistoryCanvas } from './ui/HistoryCanvas'
 import { ChatPanel } from './ui/ChatPanel'
+import { StickyInputs } from './ui/StickyInputs'
 import { chatOpen } from './ai/agent'
 import { watchHistory } from './shapes/versions'
+import { ROOM_RE, restoreRoom, takeRestore } from './rooms'
 
 const shapeUtils = [IoShapeUtil, LogicShapeUtil, WireShapeUtil, CameraShapeUtil, ClipShapeUtil]
 const bindingUtils = [WireBindingUtil]
@@ -36,6 +38,7 @@ const components: TLComponents = {
 	InFrontOfTheCanvas: () => (
 		<>
 			<Palette />
+			<StickyInputs />
 			<WireInspector />
 			<PinPicker />
 		</>
@@ -52,7 +55,7 @@ export function App() {
 /** Every canvas is a room; the link is the invitation. */
 function ensureRoom(params: URLSearchParams) {
 	let room = params.get('room')
-	if (!room || !/^[\w-]{6,64}$/.test(room)) {
+	if (!room || !ROOM_RE.test(room)) {
 		room = crypto.randomUUID().slice(0, 13)
 		const url = new URL(location.href)
 		url.searchParams.set('room', room)
@@ -64,6 +67,8 @@ function ensureRoom(params: URLSearchParams) {
 function Canvas({ roomId }: { roomId: string }) {
 	const store = useSyncDemo({ roomId: `micropython-canvas-${roomId}`, shapeUtils, bindingUtils })
 	const [editor, setEditor] = useState<Editor | null>(null)
+	// A saved room opened from its link or the save panel: its canvas, in case the server lost it.
+	const [restore] = useState(() => takeRestore(roomId))
 	const codeOpen = useValue(codePanelOpen)
 	const customOpen = useValue(editingCustom)
 	const assistantOpen = useValue(chatOpen)
@@ -80,7 +85,12 @@ function Canvas({ roomId }: { roomId: string }) {
 					onMount={(e) => {
 						setEditor(e)
 						if (import.meta.env.DEV) Object.assign(window, { editor: e, deviceStatus, device })
-						if (e.getCurrentPageShapeIds().size === 0 && !e.getShape(createShapeId('starter-button'))) seed(e)
+						const fresh = () => e.getCurrentPageShapeIds().size === 0 && !e.getShape(createShapeId('starter-button'))
+						if (restore)
+							restoreRoom(e, restore)
+								.catch((err) => (logLine(`Could not open the saved room: ${err}`), false))
+								.then((done) => !done && fresh() && seed(e))
+						else if (fresh()) seed(e)
 						const stopGrid = setUpGrid(e)
 						const stopSampler = startSampler(e)
 						const detach = attachDevice(e)
@@ -125,7 +135,7 @@ function seed(editor: Editor) {
 					type: IO_TYPE,
 					x: x - IO_W - 96,
 					y,
-					props: { kind: 'din', label: 'BOOT button', pin: 0, pull: 'up' },
+					props: { kind: 'din', label: 'BOOT button', pin: 0, pull: 'up', device: 'no' },
 				},
 				{
 					id: led,

@@ -2,6 +2,11 @@ import { useEditor, useValue } from 'tldraw'
 import { Block, PortInfo } from '../shapes/signals'
 import { SignalType, WIRE_TYPE } from '../shapes/types'
 import { beginWireDrag, isCompatibleTarget, wireDrag } from '../shapes/wiring'
+import { IEC_HINT, IecType, isPlc } from '../plc/iec'
+import { portName } from '../plc/names'
+
+/** In PLC mode the glyph follows the IEC type: BOOL square, REAL circle, INT and TIME diamond. */
+const IEC_GLYPH: Record<IecType, SignalType> = { BOOL: 'digital', REAL: 'analog', INT: 'number', TIME: 'number', DWORD: 'colour' }
 
 const TYPE_NAME: Record<SignalType, string> = {
 	digital: 'Digital (HIGH / LOW)',
@@ -17,6 +22,7 @@ const TYPE_NAME: Record<SignalType, string> = {
  */
 export function Port({ block, port, title }: { block: Block; port: PortInfo; title?: string }) {
 	const editor = useEditor()
+	const plc = useValue('plc', () => isPlc(editor), [editor])
 	const state = useValue(
 		'port',
 		() => {
@@ -37,7 +43,7 @@ export function Port({ block, port, title }: { block: Block; port: PortInfo; tit
 	const cls = [
 		'port',
 		`port-${port.side}`,
-		`port-${port.type}`,
+		`port-${plc ? IEC_GLYPH[port.iec] : port.type}`,
 		state.connected && 'is-connected',
 		state.target && 'is-target',
 		state.snapped && 'is-snapped',
@@ -51,7 +57,7 @@ export function Port({ block, port, title }: { block: Block; port: PortInfo; tit
 			style={{ top: port.local.y, pointerEvents: 'all' }}
 			title={
 				title ??
-				`${port.label ? port.label + ': ' : ''}${TYPE_NAME[port.type]} ${port.side === 'out' ? 'out — drag to an input' : 'in — drag a wire here'}`
+				`${port.label || (plc && port.id) ? portName(plc, port) + ' · ' : ''}${plc ? IEC_HINT[port.iec] : TYPE_NAME[port.type]} ${port.side === 'out' ? 'out — drag to an input' : 'in — drag a wire here'}`
 			}
 			onPointerDown={(e) => beginWireDrag(editor, block, port.id, e)}
 		>

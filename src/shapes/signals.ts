@@ -2,8 +2,10 @@ import { Editor, TLShapeId, TLShapePartial, Vec } from 'tldraw'
 import { logicTier, portYs } from '../blocks/layout'
 import { getDef } from '../blocks/registry'
 import { playback, recordedSeries, recordedValue } from './playback'
+import { IecType, iecCompatible, iecOfIo, iecOfSignal, isPlc, isPlcStopped } from '../plc/iec'
 import {
 	Curve,
+	DEVICE_INFO,
 	Edge,
 	IO_TYPE,
 	IoKind,
@@ -57,6 +59,8 @@ export interface PortInfo {
 	id: string
 	side: PortSide
 	type: SignalType
+	/** The port's type in PLC mode. */
+	iec: IecType
 	label: string
 	unit?: string
 	default?: number
@@ -75,6 +79,7 @@ export function blockPorts(block: Block): PortInfo[] {
 				id: '',
 				side,
 				type: signalType(block.props.kind),
+				iec: iecOfIo(block.props.kind),
 				label: '',
 				local: new Vec(side === 'out' ? w : 0, h / 2),
 			},
@@ -90,6 +95,7 @@ export function blockPorts(block: Block): PortInfo[] {
 			id: p.id,
 			side: 'in' as const,
 			type: p.type,
+			iec: p.iec ?? iecOfSignal(p.type),
 			label: p.label ?? p.id,
 			unit: p.unit,
 			default: p.default,
@@ -99,6 +105,7 @@ export function blockPorts(block: Block): PortInfo[] {
 			id: p.id,
 			side: 'out' as const,
 			type: p.type,
+			iec: p.iec ?? iecOfSignal(p.type),
 			label: p.label ?? p.id,
 			unit: p.unit,
 			local: new Vec(w, own[p.id] ?? outYs[i]),
@@ -158,6 +165,25 @@ export function getOutgoingWires(editor: Editor, blockId: TLShapeId, port?: stri
 export function portTypeOf(block: Block | undefined, port: string): SignalType {
 	if (!block) return 'analog'
 	return getPort(block, port)?.type ?? 'analog'
+}
+
+export function iecTypeOf(block: Block | undefined, port: string): IecType {
+	if (!block) return 'REAL'
+	return getPort(block, port)?.iec ?? 'REAL'
+}
+
+/**
+ * In PLC mode, a wire whose ends have types that don't join (REAL into BOOL,
+ * say): it carries nothing until a conversion block goes in between. Null for
+ * a wire that is fine, and always outside PLC mode.
+ */
+export function wireTypeError(editor: Editor, wire: WireShape | TLShapeId): { src: IecType; dst: IecType } | null {
+	if (!isPlc(editor)) return null
+	const { from, fromPort, to, toPort } = getWireEnds(editor, wire)
+	if (!from || !to) return null
+	const src = iecTypeOf(from, fromPort)
+	const dst = iecTypeOf(to, toPort)
+	return iecCompatible(src, dst) ? null : { src, dst }
 }
 
 /* ------------------------------------------------------- transfer function */
@@ -289,12 +315,17 @@ export function inputValue(
 	fresh?: Fresh,
 	depth = 0
 ): number {
+	const plc = isPlc(editor)
+	// A PLC in STOP switches every output off.
+	if (plc && block.type === IO_TYPE && !isInput(block.props.kind) && isPlcStopped(editor)) return 0
 	const pb = live ? null : playback.get()
 	const wire = getIncomingWire(editor, block.id, port)
 	const ends = wire && getWireEnds(editor, wire)
 	const from = ends?.from
+	// PLC wires are typed: one that joins the wrong types carries nothing.
+	const typeError = plc && !!from && !iecCompatible(iecTypeOf(from, ends.fromPort), iecTypeOf(block, port))
 
-	if (!wire || !from || depth > 8) {
+	if (!wire || !from || depth > 8 || typeError) {
 		if (block.type === LOGIC_TYPE) return block.props.params[port] ?? getPort(block, port, 'in')?.default ?? 0
 		// Puppeteered by hand: replay how it was moved.
 		return (pb && recordedValue(editor, pb.clipId, block.id, pb.t)) ?? block.props.value
@@ -308,6 +339,9 @@ export function inputValue(
 		const own = recordedValue(editor, pb.clipId, block.id, pb.t)
 		if (own !== undefined) return own
 	}
+
+	// A PLC wire carries the value as it is; converting is what blocks are for.
+	if (plc) return outputValue(editor, from, ends.fromPort, live, fresh)
 
 	// A toggle's state at a moment in a recording depends on everything before it.
 	if (pb && wire.props.fn === 'toggle' && from.type === IO_TYPE) {
@@ -345,13 +379,15 @@ export function writeSignals(
 ) {
 	const shapes: TLShapePartial[] = [...extra]
 	const outs = new Map<TLShapeId, Record<string, number>>()
+	const plc = isPlc(editor)
 	for (const u of updates) {
 		const block = getBlock(editor, u.id)
 		if (!block) continue
 		const port = u.port ?? ''
 		const before = outputValue(editor, block, port, true)
 		const src = portTypeOf(block, port)
-		for (const wire of getOutgoingWires(editor, block.id, port)) {
+		// PLC wires have no functions: toggling is a block's job (SR, CTU…).
+		for (const wire of plc ? [] : getOutgoingWires(editor, block.id, port)) {
 			const p = wire.props
 			if (p.fn === 'toggle' && isEdge(p.edge, asBool(p, src, before), asBool(p, src, u.value))) {
 				shapes.push({ id: wire.id, type: WIRE_TYPE, props: { state: p.state ? 0 : 1 } })
@@ -387,5 +423,6 @@ export const fmtColour = (c: number) => '#' + (Math.round(c) & 0xffffff).toStrin
 /** What people call a block: its own name, else what kind of block it is. */
 export function blockName(block: Block) {
 	if (block.props.label) return block.props.label
-	return block.type === IO_TYPE ? KIND_INFO[block.props.kind].title : getDef(block).title
+	if (block.type !== IO_TYPE) return getDef(block).title
+	return block.props.kind === 'din' ? DEVICE_INFO[block.props.device ?? 'signal'].title : KIND_INFO[block.props.kind].title
 }

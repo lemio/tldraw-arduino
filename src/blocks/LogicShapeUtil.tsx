@@ -1,3 +1,4 @@
+import { plcName, plcSymbol, portName } from '../plc/names'
 import { useLayoutEffect, useRef, useState } from 'react'
 import {
 	HTMLContainer,
@@ -24,6 +25,11 @@ import { PortSpec, RenderContext, Tier } from './define'
 import { HEAD, LOGIC_W, ROW, logicTier, simpler } from './layout'
 import { CUSTOM_ID, getDef } from './registry'
 import { editingCustom } from './CustomEditor'
+import { executionIndex } from './order'
+import { IecType, fmtIec, fmtTime, iecOfSignal, isPlc, isPlcStopped, parseTime } from '../plc/iec'
+
+/** A port's IEC type in PLC mode, else null (the maker formats apply). */
+const iecFor = (plc: boolean, p: PortSpec): IecType | null => (plc ? (p.iec ?? iecOfSignal(p.type)) : null)
 
 export class LogicShapeUtil extends ShapeUtil<LogicShape> {
 	static override type = LOGIC_TYPE
@@ -115,6 +121,10 @@ function LogicBlock({ shape }: { shape: LogicShape }) {
 	)
 	const isEditing = useValue('editing', () => editor.getEditingShapeId() === shape.id, [editor, shape.id])
 	const isOnlySelected = useValue('selected', () => editor.getOnlySelectedShapeId() === shape.id, [editor, shape.id])
+	// PLC mode: IEC values, every pin's value shown, and the block's place in the scan.
+	const plc = useValue('plc', () => isPlc(editor), [editor])
+	const stopped = useValue('stopped', () => isPlcStopped(editor), [editor])
+	const step = useValue('step', () => (plc ? executionIndex(editor, shape.id) : 0), [editor, shape.id, plc])
 	// Which inputs are wired, and what arrives at each: drawn next to the ports.
 	const arriving = useValue(
 		'inputs',
@@ -149,11 +159,11 @@ function LogicBlock({ shape }: { shape: LogicShape }) {
 	}
 	const custom = def.render?.[tier]
 
-	const name = label || def.title
+	const name = label || plcName(def)
 	const nameEl = isEditing ? (
 		<NameInput
 			value={label}
-			placeholder={def.example ?? `What is it for? (${def.title})`}
+			placeholder={def.example ?? `What is it for? (${plcName(def)})`}
 			onCommit={(v) => v !== label && update({ label: v })}
 			onDone={() => editor.setEditingShape(null)}
 		/>
@@ -173,19 +183,41 @@ function LogicBlock({ shape }: { shape: LogicShape }) {
 	const own = def.layout
 	const head = own ? own.head(h) : tier !== 'value'
 
+	const progress = plc && tier === 'full' && def.plc?.progress ? def.plc.progress({ out, inputs: arriving }) : null
 	const main = custom ? (
 		custom(ctx)
 	) : display ? (
-		<MainValue shape={shape} port={display} value={value} tier={tier} />
+		progress === null ? (
+			<MainValue shape={shape} port={display} value={value} tier={tier} plc={plc} />
+		) : (
+			<div className="plc-main">
+				<MainValue shape={shape} port={display} value={value} tier={tier} plc={plc} />
+				<div className="plc-progress" title={`${Math.round(Math.max(0, Math.min(1, progress)) * 100)} %`}>
+					<i style={{ width: `${Math.max(0, Math.min(1, progress)) * 100}%` }} />
+				</div>
+			</div>
+		)
 	) : null
 
 	return (
-		<HTMLContainer className={`io logic logic-tier-${tier} io-tier-${tier}${error ? ' has-error' : ''}${replaying ? ' io-replay' : ''}`} style={{ width: w, height: h }}>
+		<HTMLContainer
+			className={`io logic logic-tier-${tier} io-tier-${tier}${error ? ' has-error' : ''}${replaying ? ' io-replay' : ''}${plc ? ' is-plc' : ''}${stopped ? ' is-stopped' : ''}`}
+			style={{ width: w, height: h }}
+		>
 			{head && (
 				<div className="io-head">
 					{nameEl}
 					<span className="io-chips">
-						{label && <span className="chip chip-kind" title={def.description}>{def.title}</span>}
+						{step > 0 && (
+							<span className="chip chip-step" title={`Runs ${ordinal(step)} in every scan`}>
+								{step}
+							</span>
+						)}
+						{(label || def.plc) && (
+							<span className="chip chip-kind" title={`${plcName(def)}: ${def.description}`}>
+								{label ? (plcSymbol(def) ?? plcName(def)) : (plcSymbol(def) ?? def.title)}
+							</span>
+						)}
 						{shape.props.def === CUSTOM_ID && (
 							<button
 								className="chip"
@@ -217,6 +249,7 @@ function LogicBlock({ shape }: { shape: LogicShape }) {
 							<InputLabel
 								key={p.id}
 								port={p}
+								plc={plc}
 								wired={wired.has(p.id)}
 								value={arriving[p.id]}
 								onChange={(v, record) => setParam(p.id, v, record)}
@@ -227,15 +260,35 @@ function LogicBlock({ shape }: { shape: LogicShape }) {
 						{main}
 					</div>
 					<div className="logic-outs">
-						{def.outputs.map((p) => (
-							<span key={p.id} className="logic-port-label" title={`${p.label ?? p.id}: ${fmtValue(p.type, out[p.id] ?? 0, p.unit)}`}>
-								{p.id === display?.id ? '' : p.label ?? p.id}
-							</span>
-						))}
+						{def.outputs.map((p) => {
+							const iec = iecFor(plc, p)
+							const shown = iec ? fmtIec(iec, out[p.id] ?? 0) : fmtValue(p.type, out[p.id] ?? 0, p.unit)
+							return (
+								<span key={p.id} className="logic-port-label" title={`${portName(plc, p)} = ${shown}`}>
+									{/* Online, a PLC shows every pin's value, the main one included. */}
+									{iec && <span className="logic-arriving">{shown}</span>}
+									{p.id === display?.id && !iec ? '' : (p.label ?? p.id)}
+								</span>
+							)
+						})}
 					</div>
 				</div>
 			) : (
-				<div className="io-body">{tier === 'value' && isEditing ? nameEl : main}</div>
+				<div className="io-body">
+					{tier === 'value' && isEditing ? (
+						nameEl
+					) : (
+						<>
+							{/* Zoomed all the way out, a PLC block still says what it is. */}
+							{plc && tier === 'value' && def.plc && (
+								<span className="plc-type" title={plcName(def)}>
+									{plcSymbol(def) ?? def.title}
+								</span>
+							)}
+							{main}
+						</>
+					)}
+				</div>
 			)}
 
 			{tier === 'full' && def.controls?.length ? (
@@ -268,7 +321,7 @@ function LogicBlock({ shape }: { shape: LogicShape }) {
 }
 
 /** The block's main output: big, with its sparkline (or colour strip) beside it. */
-function MainValue({ shape, port, value, tier }: { shape: LogicShape; port: PortSpec; value: number; tier: Tier }) {
+function MainValue({ shape, port, value, tier, plc }: { shape: LogicShape; port: PortSpec; value: number; tier: Tier; plc: boolean }) {
 	const ref = useRef<HTMLDivElement>(null)
 	const [width, setWidth] = useState(0)
 	useLayoutEffect(() => {
@@ -300,8 +353,9 @@ function MainValue({ shape, port, value, tier }: { shape: LogicShape; port: Port
 				<ColourValue value={value} showHex={false} />
 			) : (
 				<span className={`io-value${port.type === 'digital' && value >= 0.5 ? ' is-high' : ''}${port.type === 'digital' ? ' is-digital' : ''}`}>
-					{fmtMain(port.type, value)}
-					{unitOf(port) && <small>{unitOf(port)}</small>}
+					{plc ? fmtIec(iecFor(plc, port)!, value) : fmtMain(port.type, value)}
+					{!plc && unitOf(port) && <small>{unitOf(port)}</small>}
+					{plc && port.unit && port.iec !== 'TIME' && <small>{port.unit}</small>}
 				</span>
 			)}
 		</div>
@@ -331,18 +385,76 @@ export function fmtValue(type: SignalType, v: number, unit?: string) {
  */
 function InputLabel({
 	port,
+	plc,
 	wired,
 	value,
 	onChange,
 }: {
 	port: PortSpec
+	plc: boolean
 	wired: boolean
 	value: number
 	onChange(v: number, record: boolean): void
 }) {
 	const [typing, setTyping] = useState(false)
 	const label = port.label ?? port.id
+	const iec = iecFor(plc, port)
 	let control: React.ReactNode = null
+	if (iec && iec !== 'DWORD') {
+		// PLC: every unconnected input is a constant, shown and typed the IEC way.
+		const shown = fmtIec(iec, value) + (port.unit && iec !== 'TIME' ? ` ${port.unit}` : '')
+		if (wired) control = <span className="logic-arriving">{shown}</span>
+		else if (iec === 'BOOL')
+			control = (
+				<button
+					className="logic-param"
+					style={{ pointerEvents: 'all' }}
+					onPointerDown={stopEventPropagation}
+					onClick={() => onChange(value >= 0.5 ? 0 : 1, true)}
+					title="Click to switch"
+				>
+					{shown}
+				</button>
+			)
+		else if (typing)
+			control = (
+				<input
+					className="logic-param-input"
+					autoFocus
+					defaultValue={iec === 'TIME' ? fmtTime(value) : String(value)}
+					onPointerDown={stopEventPropagation}
+					onKeyDown={(e) => {
+						e.stopPropagation()
+						if (e.key === 'Enter') e.currentTarget.blur()
+						if (e.key === 'Escape') setTyping(false)
+					}}
+					onBlur={(e) => {
+						const text = e.currentTarget.value
+						const v = iec === 'TIME' ? parseTime(text) : Number(text)
+						if (v !== null && Number.isFinite(v)) onChange(iec === 'INT' ? Math.round(v) : v, true)
+						setTyping(false)
+					}}
+				/>
+			)
+		else
+			control = (
+				<button
+					className="logic-param"
+					style={{ pointerEvents: 'all' }}
+					onPointerDown={stopEventPropagation}
+					onClick={() => setTyping(true)}
+					title={iec === 'TIME' ? 'Click to change, for example T#2s500ms' : 'Click to change'}
+				>
+					{shown}
+				</button>
+			)
+		return (
+			<span className="logic-port-label" title={portName(plc, port)}>
+				{label}
+				{control}
+			</span>
+		)
+	}
 	if (wired) {
 		control =
 			port.type === 'colour' ? (
@@ -404,6 +516,12 @@ function InputLabel({
 			{control}
 		</span>
 	)
+}
+
+const ordinal = (n: number) => {
+	const s = ['th', 'st', 'nd', 'rd']
+	const v = n % 100
+	return n + (s[(v - 20) % 10] || s[v] || s[0])
 }
 
 function clickNotDrag(e: React.PointerEvent, action: () => void) {

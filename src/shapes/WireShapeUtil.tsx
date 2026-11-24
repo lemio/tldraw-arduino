@@ -29,12 +29,14 @@ import {
 	fmtPct,
 	getBlock,
 	getWireEnds,
+	iecTypeOf,
 	isMap,
 	isPlainWire,
 	outputValue,
 	portTypeOf,
 	transfer,
 } from './signals'
+import { IecType, iecCompatible, isPlc } from '../plc/iec'
 import { SignalType, WIRE_DEFAULTS, WIRE_TYPE, WireShape } from './types'
 import { baseColour, look, netColour } from '../style'
 import { CurveGlyph } from '../ui/CurvePlot'
@@ -127,8 +129,15 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
 		// Keep the selection line out of the badge, as tldraw does for arrow labels.
 		const { from, fromPort, to, toPort } = getWireEnds(this.editor, shape.id)
 		if (!from || !to) return path
+		const plc = isPlc(this.editor)
 		const plain = isPlainWire(shape.props, portTypeOf(from, fromPort), portTypeOf(to, toPort))
-		const [bw, bh] = plain ? [22, 20] : [150, 22]
+		const [bw, bh] = plc
+			? iecCompatible(iecTypeOf(from, fromPort), iecTypeOf(to, toPort))
+				? [48, 20]
+				: [150, 22]
+			: plain
+				? [22, 20]
+				: [150, 22]
 		const m = badgeSpot(this.editor, shape).clone().sub({ x: shape.x, y: shape.y })
 		const bounds = this.getGeometry(shape).bounds
 		const clipPath = new Path2D()
@@ -236,13 +245,19 @@ function Wire({ shape }: { shape: WireShape }) {
 			const src = portTypeOf(a, aPort)
 			const dst = b ? portTypeOf(b, bPort) : src
 			const v = outputValue(editor, a, aPort)
+			// PLC: typed wires carry the value as it is, or nothing when the types don't join.
+			const plc = isPlc(editor)
+			const iecSrc = iecTypeOf(a, aPort)
+			const iecDst = b ? iecTypeOf(b, bPort) : iecSrc
+			const typeError = plc && !iecCompatible(iecSrc, iecDst)
 			return {
 				net: netColour(editor, a.id, aPort),
 				src,
 				dst,
 				connected: !!b,
 				in: v,
-				out: b ? transfer(shape.props, src, dst, v, shape.props.state) : v,
+				out: !b ? v : plc ? (typeError ? 0 : v) : transfer(shape.props, src, dst, v, shape.props.state),
+				plc: plc ? { src: iecSrc, dst: iecDst, error: typeError } : null,
 			}
 		},
 		[editor, shape.id]
@@ -274,7 +289,12 @@ function Wire({ shape }: { shape: WireShape }) {
 					</>
 				)}
 			</SVGContainer>
-			{info?.connected && (!plain || active) && (
+			{info?.connected && info.plc && (info.plc.error || active) && (
+				<HTMLContainer>
+					<PlcBadge shape={shape} at={mid} {...info.plc} />
+				</HTMLContainer>
+			)}
+			{info?.connected && !info.plc && (!plain || active) && (
 				<HTMLContainer>
 					<WireBadge shape={shape} at={mid} src={info.src} dst={info.dst} level={info.in} compact={compact} />
 				</HTMLContainer>
@@ -296,6 +316,35 @@ function signalStyle(v: number, type: SignalType, net: string): React.CSSPropert
 }
 
 const arrowFor = { rise: '↑', fall: '↓', both: '↕' } as const
+
+/**
+ * In PLC mode a wire only carries a value, so its badge only says what type:
+ * on hover, or always (in red) when the two ends don't join.
+ */
+function PlcBadge({ shape, at: p, src, dst, error }: { shape: WireShape; at: VecLike; src: IecType; dst: IecType; error: boolean }) {
+	const editor = useEditor()
+	return (
+		<div
+			className={`cast cast-plc${error ? ' cast-error' : ''}`}
+			style={{ left: p.x, top: p.y }}
+			title={
+				error
+					? `Type error: a ${src} output can't drive a ${dst} input. Put a conversion block in between. Click for more.`
+					: src === dst
+						? `${src} wire`
+						: `${src} widens to ${dst} on the way`
+			}
+			onPointerDown={(e) => e.stopPropagation()}
+			onPointerUp={() => {
+				editor.select(shape.id)
+				inspectedWire.set(shape.id)
+			}}
+		>
+			{src === dst ? src : `${src} → ${dst}`}
+			{error && ' ✕'}
+		</div>
+	)
+}
 
 /**
  * Says what the wire does, right where it does it: a cast, a threshold, a

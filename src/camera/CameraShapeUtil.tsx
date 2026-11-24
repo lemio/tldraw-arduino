@@ -159,7 +159,7 @@ function Camera({ shape }: { shape: CameraShape }) {
 						<NameInput
 							className="cam-name"
 							value={label}
-							placeholder="What does it show? e.g. Front door"
+							placeholder="What does it show? For example: Front door"
 							onCommit={(v) => v !== label && update({ label: v })}
 							onDone={() => editor.setEditingShape(null)}
 						/>

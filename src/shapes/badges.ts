@@ -1,6 +1,7 @@
 import { Box, Computed, Editor, TLShapeId, Vec, computed } from 'tldraw'
 import { textScale } from '../style'
-import { getWireEnds, isMap, isPlainWire, isBlock, portTypeOf } from './signals'
+import { getWireEnds, iecTypeOf, isMap, isPlainWire, isBlock, portTypeOf } from './signals'
+import { iecCompatible, isPlc } from '../plc/iec'
 import { CAMERA_TYPE, CLIP_TYPE, SignalType, WIRE_TYPE, WireShape } from './types'
 import { pointAlong, wireRoute } from './wireGeometry'
 
@@ -45,18 +46,25 @@ function layout(editor: Editor) {
 	const wires = shapes.filter((s): s is WireShape => s.type === WIRE_TYPE).sort((a, b) => (a.id < b.id ? -1 : 1))
 	// Badges sit on straight stretches, clear of every wire's bends: a bend stays visible, and grabbable.
 	const bends = wires.flatMap((w) => route(w).slice(1, -1).map((p) => new Box(p.x - 14, p.y - 14, 28, 28)))
+	const plc = isPlc(editor)
 	for (const w of wires) {
 		const ends = getWireEnds(editor, w)
 		if (!ends.from || !ends.to) continue
 		const src = portTypeOf(ends.from, ends.fromPort)
 		const dst = portTypeOf(ends.to, ends.toPort)
+		// PLC badges just name the type: "BOOL", or "REAL → BOOL ✕".
+		const plcSize = plc
+			? iecCompatible(iecTypeOf(ends.from, ends.fromPort), iecTypeOf(ends.to, ends.toPort))
+				? { w: 48 * textScale(), h: 20 * textScale() }
+				: { w: 120 * textScale(), h: 20 * textScale() }
+			: null
 		const pts = route(w)
 		// The full badge where it fits; else the compact one; else whichever covers least,
 		// counting a covered bend four times over (it would hide a handle).
 		let pick: { box: Box; compact: boolean } | null = null
 		let pickScore = Infinity
 		for (const compact of [false, true]) {
-			const size = badgeSize(w, src, dst, compact)
+			const size = plcSize ?? badgeSize(w, src, dst, compact)
 			for (const t of TRIES) {
 				const c = pointAlong(pts, t)
 				const box = new Box(c.x - size.w / 2, c.y - size.h / 2, size.w, size.h)

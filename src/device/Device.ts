@@ -3,7 +3,7 @@ import { ESPRESSIF_VID, hardReset, settleSignals } from './reset'
 
 /*
  * One ESP32-S3 running MicroPython, reached over Web Serial (or WebUSB for
- * CH340 boards where Web Serial is missing, e.g. Chrome on Android).
+ * CH340 boards where Web Serial is missing, for example Chrome on Android).
  * Protocol and flashing follow lemio/Documenter's device.js.
  */
 

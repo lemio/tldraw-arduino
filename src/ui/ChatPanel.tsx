@@ -3,7 +3,7 @@ import { Editor, useValue } from 'tldraw'
 import { apiKey, chatBusy, chatLog, chatOpen, newChat, sendChat, setApiKey, stopChat } from '../ai/agent'
 
 const EXAMPLES = [
-	'When the BOOT button is pressed, blink the RGB LED red for 5 seconds',
+	'When the BOOT button is pressed, blink the colour LED red for 5 seconds',
 	'A night light: an LED that turns on when the room gets dark',
 	'Count how often the door opens and show it on a gauge',
 ]
@@ -83,7 +83,7 @@ export function ChatPanel({ editor }: { editor: Editor }) {
 						<textarea
 							value={draft}
 							rows={3}
-							placeholder="e.g. Turn the fan on when it's warmer than 25 °C"
+							placeholder="For example: Turn the fan on when it's warmer than 25 °C"
 							onChange={(e) => setDraft(e.target.value)}
 							onKeyDown={(e) => {
 								// Keep typing out of the canvas's shortcuts.

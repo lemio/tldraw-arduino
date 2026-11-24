@@ -4,7 +4,7 @@ export default defineBlock({
 	id: 'logic.at-least',
 	category: 'Logic',
 	title: 'At least',
-	description: 'HIGH while a number is at least a limit, e.g. three visitors',
+	description: 'HIGH while a number is at least a limit, for example three visitors',
 	inputs: [
 		{ id: 'value', type: 'number' },
 		{ id: 'limit', type: 'number', default: 3 },

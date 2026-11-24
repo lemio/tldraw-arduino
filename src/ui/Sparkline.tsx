@@ -3,6 +3,7 @@ import { SAMPLE_HZ, WINDOW_S, getSeries, sampleTick } from '../shapes/history'
 import { getClip, playback, recordedSeries } from '../shapes/playback'
 import { fmtColour, getIncomingWire, getIo, getWireEnds, portTypeOf, simulate } from '../shapes/signals'
 import { isInput, signalType } from '../shapes/types'
+import { isPlc } from '../plc/iec'
 
 /*
  * A Tufte sparkline: no axes, no grid, a fixed 0..1 scale so that height means
@@ -146,6 +147,7 @@ function replayWindow(editor: Editor, id: TLShapeId) {
 	const from = ends?.from
 	const s = from && from.type === 'io' && recordedSeries(editor, pb.clipId, from.id, pb.t)
 	if (!wire || !from || !s) return null
-	const out = simulate(wire.props, portTypeOf(from, ends.fromPort), signalType(block.props.kind), s)
+	// PLC wires pass values unchanged.
+	const out = isPlc(editor) ? s : simulate(wire.props, portTypeOf(from, ends.fromPort), signalType(block.props.kind), s)
 	return out.subarray(Math.max(0, out.length - keep))
 }

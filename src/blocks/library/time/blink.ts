@@ -5,7 +5,7 @@ export default defineBlock({
 	category: 'Time',
 	title: 'Blink',
 	description: 'Switches HIGH and LOW on its own, every so many seconds',
-	example: 'e.g. Warning flasher',
+	example: 'For example: Warning flasher',
 	inputs: [
 		{ id: 'on', type: 'digital', default: 1 },
 		{ id: 'seconds', type: 'number', default: 0.5, unit: 's' },

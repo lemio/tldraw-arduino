@@ -17,7 +17,7 @@ export const BOARD = {
 }
 
 export interface BoardPin {
-	/** Header label, e.g. "4", "GND.1", "3V3.2". */
+	/** Header label, for example "4", "GND.1", "3V3.2". */
 	id: string
 	/** Centre in artwork px. */
 	x: number

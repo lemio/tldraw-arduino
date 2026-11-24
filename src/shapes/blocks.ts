@@ -11,7 +11,7 @@ import {
 } from 'tldraw'
 import { logicSize } from '../blocks/layout'
 import { CUSTOM_ID, DEFAULT_CUSTOM, defaultCustomDef, getLibraryDef } from '../blocks/registry'
-import { CAMERA_TYPE, IO_TYPE, IoKind, IoShape, LOGIC_TYPE, suggestPin } from './types'
+import { CAMERA_TYPE, IO_TYPE, InputDevice, IoKind, IoShape, LOGIC_TYPE, isContact, suggestPin } from './types'
 
 /*
  * Blocks live on a 16 px grid. A block is 240 × 96, so its port (at half
@@ -47,8 +47,9 @@ export function usedPins(editor: Editor) {
 }
 
 /** Create an IO block centred on `at` (page space). */
-export function createIoBlock(editor: Editor, kind: IoKind, at: VecLike): TLShapeId {
+export function createIoBlock(editor: Editor, kind: IoKind, at: VecLike, device: InputDevice = 'signal'): TLShapeId {
 	const id = createShapeId()
+	const contact = kind === 'din' && isContact(device)
 	editor.createShape({
 		id,
 		type: IO_TYPE,
@@ -58,6 +59,7 @@ export function createIoBlock(editor: Editor, kind: IoKind, at: VecLike): TLShap
 			kind,
 			pin: suggestPin(kind, usedPins(editor)),
 			pull: kind === 'din' ? 'up' : 'none',
+			...(kind === 'din' ? { device, value: contact && device === 'nc' ? 1 : 0 } : {}),
 		},
 	})
 	return id

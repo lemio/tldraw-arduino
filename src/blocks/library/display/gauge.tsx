@@ -10,7 +10,7 @@ export default defineBlock({
 	category: 'Display',
 	title: 'Gauge',
 	description: 'Shows a 0–100 % signal as a dial, a bar or a number, depending on its size',
-	example: 'e.g. Tank level',
+	example: 'For example: Tank level',
 	inputs: [{ id: 'level', type: 'analog' }],
 	outputs: [{ id: 'out', type: 'analog' }],
 	display: 'out',

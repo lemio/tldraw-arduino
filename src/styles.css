@@ -700,6 +700,7 @@ kbd {
 /* share */
 
 .share {
+	position: relative;
 	gap: 6px;
 	padding: 8px 8px 0 0;
 }
@@ -715,6 +716,171 @@ kbd {
 	font-weight: 500;
 	cursor: pointer;
 	pointer-events: all;
+}
+
+/* Saving a room: a copy of the canvas that outlives the sync server. */
+.share-save {
+	height: 32px;
+	padding: 0 12px;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	background: var(--paper);
+	color: var(--ink);
+	font-family: var(--font);
+	font-size: 12px;
+	font-weight: 500;
+	cursor: pointer;
+	pointer-events: all;
+}
+.share-save:hover,
+.share-save.is-open {
+	background: var(--hover);
+}
+.rooms {
+	position: fixed;
+	top: 48px;
+	right: 8px;
+	z-index: 1000;
+	width: 320px;
+	max-height: calc(100vh - 90px);
+	overflow: auto;
+	padding: 12px;
+	border: 1px solid var(--line);
+	border-radius: 10px;
+	background: var(--paper);
+	color: var(--ink);
+	box-shadow: 0 8px 28px rgba(0, 0, 0, 0.16);
+	font-family: var(--font);
+	font-size: 12px;
+	pointer-events: all;
+	text-align: left;
+}
+.rooms h3 {
+	margin: 0 0 8px;
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--ink-2);
+}
+.rooms h3:not(:first-child) {
+	margin-top: 16px;
+}
+.rooms-save {
+	display: flex;
+	gap: 6px;
+}
+.rooms-save input {
+	flex: 1;
+	min-width: 0;
+	height: 30px;
+	padding: 0 8px;
+	border: 1px solid var(--line);
+	border-radius: 7px;
+	background: none;
+	color: inherit;
+	font: inherit;
+}
+.rooms button {
+	font: inherit;
+	color: inherit;
+	cursor: pointer;
+}
+.rooms-save button {
+	height: 30px;
+	padding: 0 12px;
+	border: none;
+	border-radius: 7px;
+	background: var(--accent);
+	color: #fff;
+	font-weight: 500;
+}
+.rooms-save button:disabled {
+	opacity: 0.5;
+}
+.rooms-hint {
+	margin: 8px 0 0;
+	color: var(--ink-2);
+	line-height: 1.4;
+}
+.rooms-note {
+	margin: 8px 0 0;
+	font-weight: 500;
+}
+.rooms-actions {
+	display: flex;
+	gap: 6px;
+	margin-top: 8px;
+}
+.rooms-actions button,
+.rooms-file {
+	height: 28px;
+	padding: 0 10px;
+	border: 1px solid var(--line);
+	border-radius: 7px;
+	background: none;
+}
+.rooms-file {
+	margin-top: 10px;
+}
+.rooms-actions button:hover,
+.rooms-file:hover,
+.rooms-icon:hover,
+.rooms-open:hover:not(:disabled) {
+	background: var(--hover);
+}
+.rooms-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.rooms-list li {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+.rooms-open {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	padding: 5px 6px;
+	border: none;
+	border-radius: 6px;
+	background: none;
+	text-align: left;
+}
+.rooms-open:disabled {
+	cursor: default;
+}
+.rooms-open span {
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 500;
+}
+.rooms-open small {
+	color: var(--ink-2);
+	font-size: 10.5px;
+}
+.rooms-icon {
+	flex: none;
+	width: 26px;
+	height: 26px;
+	border: none;
+	border-radius: 6px;
+	background: none;
+	color: var(--ink-2) !important;
+}
+:root.style-schematik .share-save,
+:root.style-schematik .rooms,
+:root.style-schematik .rooms button,
+:root.style-schematik .rooms input {
+	border-radius: 0;
+}
+:root.style-schematik .rooms-save button {
+	background: var(--ink);
+	color: var(--paper);
 }
 
 /* =========================================================== code panel */
@@ -2646,4 +2812,400 @@ button.chip {
 .picker-ask b {
 	font-weight: 600;
 	margin-right: 4px;
+}
+
+/* =============================================================== PLC mode */
+
+/* RUN / STOP, like the switch on a PLC: a green or amber status LED. */
+.hwbar button.plc-mode {
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.04em;
+}
+.plc-led {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: #2fa84f;
+	box-shadow: 0 0 0 2px rgba(47, 168, 79, 0.2);
+}
+.plc-mode.is-stop .plc-led {
+	background: #e0a100;
+	box-shadow: 0 0 0 2px rgba(224, 161, 0, 0.22);
+}
+
+/* The palette of IEC blocks: the full name, its code or symbol beside it. */
+.palette.is-plc {
+	width: 188px;
+}
+.palette-title {
+	flex: 1;
+	min-width: 0;
+	white-space: normal;
+	line-height: 1.2;
+}
+.palette button:has(.palette-title),
+:root.style-schematik .palette button:has(.palette-title) {
+	height: auto;
+	min-height: 28px;
+	padding-top: 4px;
+	padding-bottom: 4px;
+}
+.chip-device {
+	display: inline-flex;
+	align-items: center;
+	padding: 0 4px;
+}
+.chip-device svg {
+	display: block;
+}
+.palette-tag {
+	flex: none;
+	font-family: var(--mono);
+	font-size: 10px;
+	color: var(--ink-3);
+}
+
+/* A block's place in the scan. */
+.chip-step {
+	font-family: var(--mono);
+	min-width: 16px;
+	text-align: center;
+	padding: 0 5px;
+	color: var(--ink-3);
+	background: none;
+	box-shadow: inset 0 0 0 1px var(--line);
+}
+.chip-address {
+	font-family: var(--mono);
+	color: var(--ink-3);
+	background: none;
+	box-shadow: inset 0 0 0 1px var(--line);
+}
+
+/* Online values on every pin, as a PLC's monitoring view shows them. */
+.logic.is-plc .logic-port-label {
+	font-family: var(--mono);
+	font-size: 10.5px;
+}
+.logic.is-plc .logic-arriving,
+.logic.is-plc .logic-param {
+	font-family: var(--mono);
+	font-size: 10.5px;
+}
+.logic.is-plc .logic-outs .logic-arriving {
+	margin-left: 0;
+	margin-right: -2px;
+}
+.logic.is-plc .io-value {
+	font-family: var(--mono);
+	letter-spacing: -0.02em;
+}
+.logic.is-plc.logic-tier-full .logic-value .io-value {
+	font-size: 17px;
+}
+
+/* STOP: the program is halted, so its values are history. */
+.logic.is-stopped .io-body,
+.logic.is-stopped .logic-grid {
+	opacity: 0.45;
+}
+
+/* A timer's ET of PT, a counter's CV of PV. */
+.plc-main {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.plc-progress {
+	height: 3px;
+	border-radius: 2px;
+	background: var(--line);
+	overflow: hidden;
+}
+.plc-progress i {
+	display: block;
+	height: 100%;
+	background: var(--accent);
+}
+
+/* Code panel tabs: Structured Text and main.py. */
+.code h2.code-tabs {
+	display: flex;
+	gap: 2px;
+}
+.code-tabs button {
+	height: 24px;
+	padding: 0 8px;
+	border: none !important;
+	border-radius: 6px;
+	background: none;
+	font-family: var(--mono);
+	font-size: 12px;
+	color: var(--ink-3);
+	cursor: pointer;
+}
+.code-tabs button.is-on {
+	background: var(--hover);
+	color: var(--ink);
+}
+
+/* A typed wire's badge, and a wire whose types don't join. */
+.cast.cast-plc {
+	font-family: var(--mono);
+	font-size: 10.5px;
+	cursor: pointer;
+}
+.cast.cast-error {
+	color: var(--warn);
+	box-shadow: inset 0 0 0 1px var(--warn);
+}
+.insp-plc p {
+	margin: 8px 12px 0;
+	font-size: 12px;
+}
+.insp-plc .insp-note {
+	color: var(--ink-2);
+	line-height: 1.45;
+	margin-bottom: 12px;
+}
+.insp-plc .insp-error {
+	color: var(--warn);
+}
+.insp-plc .insp-straighten {
+	margin: 0 12px 12px;
+}
+
+/* Zoomed all the way out, a PLC block keeps its type: TON, GT… */
+.plc-type {
+	flex: none;
+	align-self: center;
+	margin-left: 4px;
+	font-family: var(--mono);
+	font-size: 11px;
+	color: var(--ink-3);
+}
+
+/* ============================================================ inputs */
+
+/* A button's or switch's contact, drawn live as in Schematik's circuit drawings:
+   hollow terminals, a lever or a push bar, square ends, and the net's colour. */
+.contact {
+	flex: none;
+	align-self: center;
+	overflow: visible;
+	color: var(--ink);
+}
+.contact line,
+.contact path,
+.contact circle {
+	fill: none;
+	stroke: var(--ink);
+	stroke-linecap: butt;
+	stroke-linejoin: miter;
+}
+.contact .contact-pin {
+	stroke: var(--net, var(--ink));
+}
+.contact .contact-terminal {
+	fill: var(--paper);
+}
+.contact.is-closed .contact-move,
+.contact.is-closed .contact-move line {
+	stroke: var(--net, var(--ink));
+}
+.contact-plunger {
+	transition: transform 0.06s;
+}
+.contact-icon {
+	--net: var(--ink-2);
+}
+.palette .contact-icon {
+	opacity: 0.6;
+}
+.contact-icon line,
+.contact-icon circle {
+	stroke: var(--ink-2);
+}
+.contact.is-active {
+	cursor: pointer;
+}
+
+/* Palette: keep inputs at the left edge. */
+.palette h3 {
+	display: flex;
+	align-items: center;
+}
+.palette h3 .palette-pin {
+	width: 20px;
+	height: 18px;
+	margin-left: auto;
+	padding: 0;
+	justify-content: center;
+	cursor: pointer;
+	color: var(--ink-3);
+}
+.palette-pin svg path {
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.4;
+	stroke-linejoin: round;
+}
+.palette h3 .palette-pin.is-on {
+	color: var(--accent);
+	background: var(--hover);
+}
+.palette h3 .palette-pin.is-on svg path {
+	fill: none;
+}
+
+/* The sticky dock: inputs scrolled out of view held at the left edge, outputs at the right. */
+.sticky-dock {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	z-index: 390;
+}
+.sticky-card {
+	position: absolute;
+	box-sizing: border-box;
+	display: grid;
+	grid-template-columns: 1fr auto;
+	grid-template-rows: auto 1fr;
+	column-gap: 6px;
+	align-items: center;
+	padding: 4px 10px 4px 10px;
+	background: var(--paper);
+	color: var(--ink);
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+	font-family: var(--font);
+	font-size: 11px;
+	pointer-events: all;
+	transition: top 120ms ease-out;
+}
+.sticky-name {
+	grid-column: 1 / -1;
+	min-width: 0;
+	padding: 0;
+	border: none;
+	background: none;
+	font: inherit;
+	font-size: 10.5px;
+	color: var(--ink-3);
+	text-align: left;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	cursor: pointer;
+}
+.sticky-name:hover {
+	color: var(--ink);
+}
+.sticky-control {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	height: 24px;
+}
+.sticky-control .contact {
+	height: 26px;
+	width: 42px;
+}
+.sticky-value {
+	font-family: var(--mono);
+	font-variant-numeric: tabular-nums;
+	color: var(--ink-3);
+}
+.sticky-card.is-high .sticky-value {
+	color: var(--ink);
+	font-weight: 600;
+}
+.sticky-card.is-live {
+	border-style: dashed;
+}
+.sticky-slider {
+	width: 100%;
+	accent-color: var(--accent);
+}
+.sticky-switch {
+	width: 30px;
+	height: 16px;
+	padding: 2px;
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	background: var(--hover);
+	cursor: pointer;
+}
+.sticky-switch i {
+	display: block;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: var(--ink-3);
+	transition: transform 100ms;
+}
+.sticky-switch i.is-on {
+	transform: translateX(14px);
+	background: var(--accent);
+}
+/* Where its wire leaves: the signal goes on into the canvas. */
+.sticky-port {
+	position: absolute;
+	right: -5px;
+	top: 50%;
+	width: 8px;
+	height: 8px;
+	margin-top: -4px;
+	background: var(--paper);
+	border: 1.5px solid var(--ink-2);
+}
+.sticky-port-analog {
+	border-radius: 50%;
+}
+/* An output takes its signal in on the left. */
+.sticky-card.is-output .sticky-port {
+	right: auto;
+	left: -5px;
+}
+.sticky-port-colour {
+	border-radius: 50%;
+	border-color: transparent;
+	background: conic-gradient(#e53935, #fdd835, #43a047, #1e88e5, #8e24aa, #e53935);
+}
+/* A lamp: lit in its net's colour. */
+.sticky-lamp {
+	display: block;
+	width: 16px;
+	height: 16px;
+	padding: 0;
+	border: 1.5px solid var(--ink-2);
+	border-radius: 50%;
+	background: var(--paper);
+	cursor: pointer;
+}
+.sticky-lamp:disabled {
+	cursor: default;
+}
+.sticky-lamp.is-on {
+	border-color: var(--net, var(--ink));
+	background: var(--net, var(--ink));
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--net, var(--ink)) 22%, transparent);
+}
+.sticky-lamp.is-colour {
+	border-color: var(--line);
+}
+.sticky-level {
+	display: block;
+	width: 100%;
+	height: 6px;
+	background: var(--hover);
+}
+.sticky-level i {
+	display: block;
+	height: 100%;
+	background: var(--net, var(--ink));
 }
