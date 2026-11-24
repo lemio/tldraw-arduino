@@ -239,6 +239,28 @@ console. Get a key for the domain from [tldraw.dev](https://tldraw.dev) and
 store it as the repository variable `TLDRAW_LICENSE_KEY`. Localhost needs no
 key.
 
+### Images and videos (Firebase Cloud Storage)
+
+Images and videos dropped onto the canvas upload to Cloud Storage in the
+Firebase project `tldraw-arduino`; the room keeps only their link. The
+Firebase web app config is kept out of the repository:
+
+- **Locally**, in `.env.local` (git-ignored): `VITE_FIREBASE_API_KEY`,
+  `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`,
+  `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID` and
+  `VITE_FIREBASE_APP_ID`. The values are under *Project settings › Your apps ›
+  tldraw-arduino-storage › Config* in the Firebase console.
+- **On GitHub**, as repository Actions secrets with the same names.
+
+Without them the site still works, but uploads are off.
+
+`storage.rules` is deployed with
+`npx -y firebase-tools@latest deploy --only storage`. **It is for a demo:
+anyone can read and upload** (up to 50 MB a file), without signing in. The
+bucket lets the site read its files cross-origin through `storage.cors.json`,
+applied once from Google Cloud Shell with
+`gcloud storage buckets update gs://tldraw-arduino.firebasestorage.app --cors-file=storage.cors.json`.
+
 ## Known limits
 
 - A running **Wait** keeps its due time in that browser's clock. If a different
