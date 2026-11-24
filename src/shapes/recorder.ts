@@ -2,6 +2,7 @@ import { Editor, TLShapeId, atom, createShapeId } from 'tldraw'
 import { snapshotCircuit } from './versions'
 import { cameraStreams } from '../camera/peer'
 import { saveVideo } from '../camera/videoStore'
+import { shareClipVideo } from '../assets'
 import { place as placeOnGrid } from './blocks'
 import { SAMPLE_HZ } from './history'
 import { encodeSeries } from './playback'
@@ -132,12 +133,15 @@ export async function stopRecording(editor: Editor) {
 			channels,
 			video: key,
 			videoOwner: editor.user.getName() || 'the recording computer',
+			videoUrl: '',
 			videoH,
 			expanded: false,
 			circuit: snapshotCircuit(editor),
 		},
 	})
 	editor.select(id)
+	// Upload it for the rest of the room; the clip plays from this computer's copy meanwhile.
+	if (video) void shareClipVideo(editor, id, key, video.blob)
 }
 
 /** The selected camera if it shows video, else the first camera that does. */

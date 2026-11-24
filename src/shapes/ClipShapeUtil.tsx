@@ -12,6 +12,7 @@ import {
 	useValue,
 } from 'tldraw'
 import { loadVideo } from '../camera/videoStore'
+import { shareClipVideo } from '../assets'
 import { ColourStrip, Trace } from '../ui/Sparkline'
 import { snapToGrid } from './blocks'
 import { NameInput } from './IoShapeUtil'
@@ -34,7 +35,7 @@ export function clipHeight(p: Pick<ClipShape['props'], 'channels' | 'videoH' | '
 	return HEADER + p.videoH + rows * ROW + (between ? TOGGLE : 0) + AXIS
 }
 
-const versions = createShapePropsMigrationIds(CLIP_TYPE, { AddSteps: 1, AddCircuit: 2 })
+const versions = createShapePropsMigrationIds(CLIP_TYPE, { AddSteps: 1, AddCircuit: 2, AddVideoUrl: 3 })
 const clipMigrations = createShapePropsMigrationSequence({
 	sequence: [
 		{
@@ -49,6 +50,12 @@ const clipMigrations = createShapePropsMigrationSequence({
 			id: versions.AddCircuit,
 			up(props: Record<string, unknown>) {
 				props.circuit ??= ''
+			},
+		},
+		{
+			id: versions.AddVideoUrl,
+			up(props: Record<string, unknown>) {
+				props.videoUrl ??= ''
 			},
 		},
 	],
@@ -75,6 +82,7 @@ export class ClipShapeUtil extends ShapeUtil<ClipShape> {
 		),
 		video: T.string,
 		videoOwner: T.string,
+		videoUrl: T.string,
 		videoH: T.number,
 		expanded: T.boolean,
 		circuit: T.string,
@@ -91,6 +99,7 @@ export class ClipShapeUtil extends ShapeUtil<ClipShape> {
 			channels: [],
 			video: '',
 			videoOwner: '',
+			videoUrl: '',
 			videoH: 0,
 			expanded: false,
 			circuit: '',
@@ -133,7 +142,7 @@ export class ClipShapeUtil extends ShapeUtil<ClipShape> {
 
 function Clip({ shape }: { shape: ClipShape }) {
 	const editor = useEditor()
-	const { w, h, label, duration, channels, video, videoOwner } = shape.props
+	const { w, h, label, duration, channels, video, videoOwner, videoUrl } = shape.props
 	const pb = useValue(playback)
 	const mine = pb?.clipId === shape.id
 	const t = mine ? pb.t : null
@@ -147,14 +156,24 @@ function Clip({ shape }: { shape: ClipShape }) {
 	const groups = (['in', 'between', 'out'] as const).map((role) => channels.filter((c) => channelRole(c) === role))
 	const traceW = w - 24 - LABEL
 
+	// Play this computer's own copy when it has one (and upload it if nobody
+	// has yet); otherwise play the uploaded video.
 	useEffect(() => {
 		if (!video) return
 		let u: string | null = null
-		void loadVideo(video).then((blob) => blob && setUrl((u = URL.createObjectURL(blob))))
+		let gone = false
+		void loadVideo(video).then((blob) => {
+			if (gone) return
+			if (blob) {
+				setUrl((u = URL.createObjectURL(blob)))
+				if (!videoUrl) void shareClipVideo(editor, shape.id, video, blob)
+			} else setUrl(videoUrl || null)
+		})
 		return () => {
+			gone = true
 			if (u) URL.revokeObjectURL(u)
 		}
-	}, [video])
+	}, [editor, shape.id, video, videoUrl])
 
 	// Scrubbing moves the video; playing lets the video (or the clock) move the playhead.
 	useEffect(() => {
@@ -248,7 +267,7 @@ function Clip({ shape }: { shape: ClipShape }) {
 					{url ? (
 						<video ref={videoEl} src={url} muted playsInline preload="auto" />
 					) : (
-						<span>Video is kept on {videoOwner}’s computer</span>
+						<span>Video is on {videoOwner}’s computer. It appears here once it is uploaded.</span>
 					)}
 				</div>
 			)}

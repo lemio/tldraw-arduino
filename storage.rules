@@ -10,5 +10,10 @@ service firebase.storage {
       // Anyone may upload, up to 50 MB a file.
       allow write: if request.resource == null || request.resource.size < 50 * 1024 * 1024;
     }
+    // Recorded clip video (at most 2 minutes, about 10 MB).
+    match /clips/{file} {
+      allow read: if true;
+      allow write: if request.resource == null || request.resource.size < 50 * 1024 * 1024;
+    }
   }
 }

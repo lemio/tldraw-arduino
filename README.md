@@ -173,8 +173,11 @@ Signals use 8 bits per sample at 20 Hz, about 1.6 kB per block per minute
 floats: 9.6 kB). Logic block outputs are recorded the same way.
 They are stored in the clip, so every collaborator can scrub them. Video is
 downscaled to 640 px, 20 fps, about 700 kbit/s (VP9 WebM), roughly 5 MB a
-minute. It stays in the recording browser's IndexedDB; collaborators see the
-traces and a note saying whose computer holds the video. Clips stop at
+minute. The recording browser keeps its own copy in IndexedDB and uploads
+the video to Firebase Cloud Storage (`clips/`), so everyone in the room can
+watch it. Until the upload is done, collaborators see the traces and a note
+saying whose computer holds the video. A clip recorded before uploads were
+possible is uploaded the next time the browser that holds its video shows it. Clips stop at
 2 minutes.
 
 Toggle state lives on the wire. The browser that writes an input value (the

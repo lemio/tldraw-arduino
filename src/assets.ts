@@ -1,6 +1,7 @@
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
-import { AssetRecordType, Editor, TLAsset, TLAssetStore, getHashForString, uniqueId } from 'tldraw'
+import { AssetRecordType, Editor, TLAsset, TLAssetStore, TLShapeId, getHashForString, uniqueId } from 'tldraw'
 import { storage } from './firebase'
+import { CLIP_TYPE, ClipShape } from './shapes/types'
 
 /*
  * Images and videos dropped or pasted onto the canvas go to Firebase Cloud
@@ -45,4 +46,30 @@ export function registerBookmarks(editor: Editor, host: string) {
 			meta: {},
 		}
 	})
+}
+
+/*
+ * Recorded clip video. The recording browser keeps its own copy (IndexedDB,
+ * see videoStore.ts) and uploads it to Storage, so everyone in the room can
+ * watch it: the clip then carries its address. A clip recorded earlier is
+ * uploaded the next time the browser holding its video shows it.
+ */
+const sharing = new Set<string>()
+
+export async function shareClipVideo(editor: Editor, clipId: TLShapeId, key: string, blob: Blob) {
+	if (!storage || !key || sharing.has(key)) return
+	sharing.add(key)
+	try {
+		// Named after the clip's video key: uploading twice (two tabs) writes the same file.
+		const stored = await uploadBytes(ref(storage, `clips/${key.replace(/[^\w.-]/g, '-')}.webm`), blob, {
+			contentType: blob.type || 'video/webm',
+		})
+		const videoUrl = await getDownloadURL(stored.ref)
+		const clip = editor.getShape<ClipShape>(clipId)
+		if (clip && clip.props.video === key && !clip.props.videoUrl)
+			editor.run(() => editor.updateShape<ClipShape>({ id: clipId, type: CLIP_TYPE, props: { videoUrl } }), { history: 'ignore' })
+	} catch (error) {
+		console.warn('Could not upload the clip video; it stays on this computer for now', error)
+		sharing.delete(key) // try again the next time the clip is shown
+	}
 }

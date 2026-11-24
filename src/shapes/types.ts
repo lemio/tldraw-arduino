@@ -129,6 +129,8 @@ export interface ClipShapeProps {
 	video: string
 	/** Display name of who holds the video, for everyone else. */
 	videoOwner: string
+	/** The video in Cloud Storage, once the recording browser has uploaded it; '' until then. */
+	videoUrl: string
 	/** Height of the video strip, 0 without video. */
 	videoH: number
 	/** Whether the in-between values (logic blocks) are shown. */
